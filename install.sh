@@ -1148,14 +1148,14 @@ install_x-ui() {
             echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
             tag_version=$(curl -4 -Ls "https://api.github.com/repos/o-0o/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
             if [[ ! -n "$tag_version" ]]; then
-                echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
-                exit 1
+                tag_version="${XUI_VERSION:-v3.3.1-speedlimit.1}"
+                echo -e "${yellow}Failed to fetch latest release, falling back to ${tag_version}.${plain}"
             fi
         fi
         echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
         curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/o-0o/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
+            echo -e "${red}Downloading x-ui failed. The release asset may not be ready yet: https://github.com/o-0o/3x-ui/releases/tag/${tag_version}${plain}"
             exit 1
         fi
     else

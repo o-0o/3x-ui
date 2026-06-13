@@ -210,6 +210,7 @@ export interface Client {
   reset: number;
   reverse?: ClientReverse | null;
   security: string;
+  speedLimit: number;
   subId: string;
   tgId: number;
   totalGB: number;
@@ -238,6 +239,7 @@ export interface ClientRecord {
   reset: number;
   reverse: unknown;
   security: string;
+  speedLimit: number;
   subId: string;
   tgId: number;
   totalGB: number;

@@ -84,6 +84,7 @@ func (s *ClientService) SyncInbound(tx *gorm.DB, inboundId int, clients []model.
 		}
 		row.SubID = incoming.SubID
 		row.LimitIP = incoming.LimitIP
+		row.SpeedLimit = incoming.SpeedLimit
 		row.TotalGB = incoming.TotalGB
 		row.ExpiryTime = incoming.ExpiryTime
 		row.Enable = incoming.Enable

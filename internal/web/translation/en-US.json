@@ -707,6 +707,8 @@
       "addClients": "Add Clients",
       "limitIp": "IP Limit",
       "limitIpDesc": "Maximum simultaneous IPs. 0 = unlimited.",
+      "speedLimit": "Speed Limit",
+      "speedLimitDesc": "Per-client upload/download cap in KB/s. 0 = unlimited.",
       "password": "Password",
       "subId": "Subscription ID",
       "online": "Online",

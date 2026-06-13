@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -125,6 +126,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	speedLevels := make(map[int]struct{})
 	for _, inbound := range inbounds {
 		if !inbound.Enable {
 			continue
@@ -164,6 +166,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				flow = "xtls-rprx-vision"
 			}
 			entry := map[string]any{"email": c.Email}
+			if c.SpeedLimit > 0 {
+				entry["level"] = c.SpeedLimit
+				speedLevels[c.SpeedLimit] = struct{}{}
+			}
 			switch inbound.Protocol {
 			case model.VLESS:
 				if c.ID != "" {
@@ -264,6 +270,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		inboundConfig := inbound.GenXrayInboundConfig()
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
+	xrayConfig.Policy = ensureClientSpeedPolicy(xrayConfig.Policy, speedLevels)
 
 	// Merge subscription-derived outbounds (if any) into the final outbounds array.
 	// These are additive: each subscription is placed before or after the template
@@ -616,6 +623,44 @@ func resolveXrayLogPaths(logCfg json_util.RawMessage) json_util.RawMessage {
 	out, err := json.Marshal(parsed)
 	if err != nil {
 		return logCfg
+	}
+	return out
+}
+
+func ensureClientSpeedPolicy(policy json_util.RawMessage, speeds map[int]struct{}) json_util.RawMessage {
+	if len(policy) == 0 || len(speeds) == 0 {
+		return policy
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(policy, &parsed); err != nil {
+		return policy
+	}
+	levels, _ := parsed["levels"].(map[string]any)
+	if levels == nil {
+		levels = make(map[string]any)
+	}
+	for speed := range speeds {
+		if speed <= 0 {
+			continue
+		}
+		levelKey := strconv.Itoa(speed)
+		level, _ := levels[levelKey].(map[string]any)
+		if level == nil {
+			level = make(map[string]any)
+		}
+		level["handshake"] = 4
+		level["connIdle"] = 300
+		level["uplinkOnly"] = speed
+		level["downlinkOnly"] = speed
+		level["statsUserUplink"] = true
+		level["statsUserDownlink"] = true
+		level["statsUserOnline"] = true
+		levels[levelKey] = level
+	}
+	parsed["levels"] = levels
+	out, err := json.Marshal(parsed)
+	if err != nil {
+		return policy
 	}
 	return out
 }

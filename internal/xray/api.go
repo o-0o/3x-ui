@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,47 @@ func getOptionalUserString(user map[string]any, key string) (string, error) {
 	}
 
 	return strValue, nil
+}
+
+func getOptionalUserLevel(user map[string]any) (uint32, error) {
+	value, ok := user["level"]
+	if !ok || value == nil {
+		value, ok = user["speedLimit"]
+	}
+	if !ok || value == nil {
+		return 0, nil
+	}
+
+	switch v := value.(type) {
+	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("invalid user level: %d", v)
+		}
+		return uint32(v), nil
+	case int64:
+		if v < 0 || v > math.MaxUint32 {
+			return 0, fmt.Errorf("invalid user level: %d", v)
+		}
+		return uint32(v), nil
+	case uint32:
+		return v, nil
+	case float64:
+		if v < 0 || v > math.MaxUint32 {
+			return 0, fmt.Errorf("invalid user level: %v", v)
+		}
+		return uint32(v), nil
+	case string:
+		if v == "" {
+			return 0, nil
+		}
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			return 0, fmt.Errorf("invalid user level %q: %w", v, err)
+		}
+		return uint32(n), nil
+	default:
+		return 0, fmt.Errorf("invalid type for user level: %T", value)
+	}
 }
 
 // Init connects to the Xray API server and initializes handler and stats service clients.
@@ -497,6 +539,10 @@ func (x *XrayAPI) AddUser(Protocol string, inboundTag string, user map[string]an
 	default:
 		return nil
 	}
+	userLevel, err := getOptionalUserLevel(user)
+	if err != nil {
+		return err
+	}
 
 	client := *x.HandlerServiceClient
 
@@ -505,6 +551,7 @@ func (x *XrayAPI) AddUser(Protocol string, inboundTag string, user map[string]an
 		Operation: serial.ToTypedMessage(&command.AddUserOperation{
 			User: &protocol.User{
 				Email:   userEmail,
+				Level:   userLevel,
 				Account: account,
 			},
 		}),

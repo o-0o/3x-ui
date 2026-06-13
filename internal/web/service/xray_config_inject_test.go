@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -118,6 +119,49 @@ func TestEnsureStatsPolicy(t *testing.T) {
 	if got := ensureStatsPolicy(bad); string(got) != string(bad) {
 		t.Fatalf("unparsable policy must be left untouched, got %s", got)
 	}
+}
+
+func TestEnsureClientSpeedPolicy(t *testing.T) {
+	out := ensureClientSpeedPolicy(
+		json_util.RawMessage(`{"levels":{"0":{"statsUserOnline":true},"512":{"connIdle":120}},"system":{"statsInboundDownlink":true}}`),
+		map[int]struct{}{512: {}, 2048: {}, 0: {}},
+	)
+	var parsed struct {
+		Levels map[string]map[string]any `json:"levels"`
+		System map[string]any            `json:"system"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"512", "2048"} {
+		level := parsed.Levels[key]
+		if level["uplinkOnly"] != float64(mustAtoi(t, key)) || level["downlinkOnly"] != float64(mustAtoi(t, key)) {
+			t.Fatalf("level %s must carry speed limits, got %v", key, level)
+		}
+		if level["statsUserUplink"] != true || level["statsUserDownlink"] != true || level["statsUserOnline"] != true {
+			t.Fatalf("level %s must carry stats flags, got %v", key, level)
+		}
+	}
+	if parsed.Levels["512"]["connIdle"] != float64(300) {
+		t.Fatalf("speed policy should own connIdle for generated level, got %v", parsed.Levels["512"])
+	}
+	if parsed.Levels["0"]["statsUserOnline"] != true || parsed.System["statsInboundDownlink"] != true {
+		t.Fatalf("existing unrelated policy blocks must survive, got %s", out)
+	}
+
+	original := json_util.RawMessage(`{"levels":{"0":{}}}`)
+	if got := ensureClientSpeedPolicy(original, nil); string(got) != string(original) {
+		t.Fatalf("empty speed set must pass through untouched, got %s", got)
+	}
+}
+
+func mustAtoi(t *testing.T, s string) int {
+	t.Helper()
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }
 
 func egressTestConfig() *xray.Config {

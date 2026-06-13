@@ -706,6 +706,8 @@
       "addClients": "添加客户端",
       "limitIp": "IP 限制",
       "limitIpDesc": "最大同时连接 IP 数。0 = 不限制。",
+      "speedLimit": "限速",
+      "speedLimitDesc": "该客户端上传/下载速度上限，单位 KB/s。0 = 不限制。",
       "password": "密码",
       "subId": "订阅 ID",
       "online": "在线",

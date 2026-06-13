@@ -1148,7 +1148,7 @@ install_x-ui() {
             echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
             tag_version=$(curl -4 -Ls "https://api.github.com/repos/o-0o/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
             if [[ ! -n "$tag_version" ]]; then
-                tag_version="${XUI_VERSION:-v3.3.1-speedlimit.1}"
+                tag_version="${XUI_VERSION:-v3.3.1-speedlimit.2}"
                 echo -e "${yellow}Failed to fetch latest release, falling back to ${tag_version}.${plain}"
             fi
         fi

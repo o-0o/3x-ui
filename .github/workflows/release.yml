@@ -98,16 +98,22 @@ jobs:
           [ -z "$CC" ] && { echo "No gcc.br_real found in $TOOLCHAIN_DIR/bin" >&2; exit 1; }
           cd -
           go build -ldflags "-w -s -linkmode external -extldflags '-static'" -o xui-release -v main.go
+          go build -ldflags "-w -s -linkmode external -extldflags '-static'" -o xui-speed-agent-release -v ./cmd/xui-speed-agent
           file xui-release
+          file xui-speed-agent-release
           ldd xui-release || echo "Static binary confirmed"
+          ldd xui-speed-agent-release || echo "Static agent binary confirmed"
 
           mkdir x-ui
           cp xui-release x-ui/
+          cp xui-speed-agent-release x-ui/
           cp x-ui.service.debian x-ui/
           cp x-ui.service.arch x-ui/
           cp x-ui.service.rhel x-ui/
+          cp contrib/systemd/xui-speed-agent.service x-ui/
           cp x-ui.sh x-ui/
           mv x-ui/xui-release x-ui/x-ui
+          mv x-ui/xui-speed-agent-release x-ui/xui-speed-agent
           mkdir x-ui/bin
           cd x-ui/bin
 

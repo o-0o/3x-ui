@@ -90,6 +90,10 @@ func ReconcileInterface(dev string, rules []Rule, run Runner) error {
 	_ = run("modprobe", "cls_flower")
 	_ = run("modprobe", "sch_fq_codel")
 
+	// Rebuild from a clean root so stale filters/classes from previous limits
+	// cannot keep matching after a client or inbound is edited.
+	_ = run("tc", "qdisc", "del", "dev", dev, "root")
+
 	if err := run("tc", "qdisc", "replace", "dev", dev, "root", "handle", rootHandle, "htb", "default", "1"); err != nil {
 		return err
 	}

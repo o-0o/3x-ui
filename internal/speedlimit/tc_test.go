@@ -49,6 +49,7 @@ func TestReconcileInterfaceBuildsHTBFilters(t *testing.T) {
 	}
 	joined := strings.Join(calls, "\n")
 	for _, want := range []string{
+		"tc qdisc del dev eth0 root",
 		"tc qdisc replace dev eth0 root handle 30: htb default 1",
 		"tc class replace dev eth0 parent 30: classid 30:100 htb rate 800kbit ceil 800kbit",
 		"tc filter add dev eth0 protocol ip parent 30: prio 10 flower ip_proto tcp src_port 30173 classid 30:100",

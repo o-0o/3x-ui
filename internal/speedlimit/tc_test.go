@@ -59,3 +59,33 @@ func TestReconcileInterfaceBuildsHTBFilters(t *testing.T) {
 		}
 	}
 }
+
+func TestReconcileConnectionsBuildsSharedEmailClass(t *testing.T) {
+	oldStateDir := stateDir
+	stateDir = t.TempDir()
+	t.Cleanup(func() { stateDir = oldStateDir })
+
+	var calls []string
+	run := func(name string, args ...string) error {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		return nil
+	}
+	err := ReconcileConnections("eth0", []ConnectionRule{
+		{Email: "alice", IP: "203.0.113.10", Port: 45678, Proto: "tcp", KBps: 100},
+		{Email: "alice", IP: "203.0.113.10", Port: 45679, Proto: "tcp", KBps: 100},
+	}, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(calls, "\n")
+	for _, want := range []string{
+		"tc qdisc replace dev eth0 root handle 31: htb default 1",
+		"tc class replace dev eth0 parent 31: classid 31:100 htb rate 800kbit ceil 800kbit",
+		"tc filter add dev eth0 protocol ip parent 31: prio 10 flower ip_proto tcp dst_ip 203.0.113.10 dst_port 45678 classid 31:100",
+		"tc filter add dev eth0 protocol ip parent 31: prio 11 flower ip_proto tcp dst_ip 203.0.113.10 dst_port 45679 classid 31:100",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing command %q in:\n%s", want, joined)
+		}
+	}
+}

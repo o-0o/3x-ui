@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -337,9 +336,6 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 					continue
 				}
 				inboundSvc.AddClientStat(tx, data.Id, &client)
-				if client.SpeedLimit > 0 {
-					needRestart = true
-				}
 				if !client.Enable {
 					continue
 				}
@@ -606,9 +602,6 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 			markDirty = true
 		}
 		if oldInbound.NodeID == nil {
-			if clientSpeedLimitFromAny(oldClients[clientIndex]) > 0 || clients[0].SpeedLimit > 0 {
-				needRestart = true
-			}
 			if !push {
 				needRestart = true
 			} else {
@@ -1051,26 +1044,4 @@ func (s *ClientService) ResetClientTrafficLimitByEmail(inboundSvc *InboundServic
 	return s.applyClientFieldByEmail(inboundSvc, clientEmail, func(c map[string]any) {
 		c["totalGB"] = totalGB * 1024 * 1024 * 1024
 	})
-}
-
-func clientSpeedLimitFromAny(raw any) int {
-	client, ok := raw.(map[string]any)
-	if !ok {
-		return 0
-	}
-	value := client["speedLimit"]
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	case string:
-		n, err := strconv.Atoi(v)
-		if err == nil {
-			return n
-		}
-	}
-	return 0
 }

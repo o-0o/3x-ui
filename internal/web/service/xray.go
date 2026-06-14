@@ -12,6 +12,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/speedlimit"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
@@ -125,6 +126,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	portSpeedRules := make([]speedlimit.Rule, 0)
 	for _, inbound := range inbounds {
 		if !inbound.Enable {
 			continue
@@ -150,6 +152,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		}
 
 		var finalClients []any
+		portSpeedLimit := 0
 		for i := range dbClients {
 			c := dbClients[i]
 			if enable, exists := enableMap[c.Email]; exists && !enable {
@@ -158,6 +161,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			}
 			if !c.Enable {
 				continue
+			}
+			if c.SpeedLimit > 0 && (portSpeedLimit == 0 || c.SpeedLimit < portSpeedLimit) {
+				portSpeedLimit = c.SpeedLimit
 			}
 			flow := c.Flow
 			if flow == "xtls-rprx-vision-udp443" {
@@ -199,6 +205,13 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				}
 			}
 			finalClients = append(finalClients, entry)
+		}
+		if portSpeedLimit > 0 {
+			portSpeedRules = append(portSpeedRules, speedlimit.Rule{
+				Port:    inbound.Port,
+				KBps:    portSpeedLimit,
+				Comment: inbound.Remark,
+			})
 		}
 
 		_, hadClients := settings["clients"]
@@ -263,6 +276,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 		inboundConfig := inbound.GenXrayInboundConfig()
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
+	}
+
+	if err := speedlimit.Reconcile(portSpeedRules); err != nil {
+		logger.Warning("port speed-limit reconcile failed:", err)
 	}
 
 	// Merge subscription-derived outbounds (if any) into the final outbounds array.

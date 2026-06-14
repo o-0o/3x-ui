@@ -706,6 +706,8 @@
       "addClients": "新增客戶端",
       "limitIp": "IP 限制",
       "limitIpDesc": "最大同時連線 IP 數。0 = 不限制。",
+      "speedLimit": "連接埠限速",
+      "speedLimitDesc": "此客戶端所在入站連接埠的上傳/下載上限，單位 KB/s。0 = 不限制。一個入站多個客戶端會共用同一個連接埠限制。",
       "password": "密碼",
       "subId": "訂閱 ID",
       "online": "上線",

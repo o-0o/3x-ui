@@ -544,6 +544,7 @@ type Client struct {
 	Auth       string         `json:"auth,omitempty"`               // Auth password (Hysteria)
 	Email      string         `json:"email"`                        // Client email identifier
 	LimitIP    int            `json:"limitIp"`                      // IP limit for this client
+	SpeedLimit int            `json:"speedLimit"`                   // Port speed cap in KB/s; 0 means unlimited
 	TotalGB    int64          `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
 	ExpiryTime int64          `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
 	Enable     bool           `json:"enable" form:"enable"`         // Whether the client is enabled
@@ -567,6 +568,7 @@ type ClientRecord struct {
 	Security   string `json:"security"`
 	Reverse    string `json:"reverse" gorm:"column:reverse"`
 	LimitIP    int    `json:"limitIp" gorm:"column:limit_ip"`
+	SpeedLimit int    `json:"speedLimit" gorm:"column:speed_limit;default:0"`
 	TotalGB    int64  `json:"totalGB" gorm:"column:total_gb"`
 	ExpiryTime int64  `json:"expiryTime" gorm:"column:expiry_time"`
 	Enable     bool   `json:"enable" gorm:"default:true"`
@@ -653,6 +655,7 @@ func (c *Client) ToRecord() *ClientRecord {
 		Flow:       c.Flow,
 		Security:   c.Security,
 		LimitIP:    c.LimitIP,
+		SpeedLimit: c.SpeedLimit,
 		TotalGB:    c.TotalGB,
 		ExpiryTime: c.ExpiryTime,
 		Enable:     c.Enable,
@@ -681,6 +684,7 @@ func (r *ClientRecord) ToClient() *Client {
 		Flow:       r.Flow,
 		Security:   r.Security,
 		LimitIP:    r.LimitIP,
+		SpeedLimit: r.SpeedLimit,
 		TotalGB:    r.TotalGB,
 		ExpiryTime: r.ExpiryTime,
 		Enable:     r.Enable,

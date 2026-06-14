@@ -707,6 +707,8 @@
       "addClients": "Add Clients",
       "limitIp": "IP Limit",
       "limitIpDesc": "Maximum simultaneous IPs. 0 = unlimited.",
+      "speedLimit": "Port Speed Limit",
+      "speedLimitDesc": "Upload/download cap for this client's inbound port, in KB/s. 0 = unlimited. Multiple clients on one inbound share the same port limit.",
       "password": "Password",
       "subId": "Subscription ID",
       "online": "Online",

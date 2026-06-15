@@ -109,6 +109,10 @@ func ReconcileInterface(dev string, rules []Rule, run Runner) error {
 	_ = run("modprobe", "cls_flower")
 	_ = run("modprobe", "sch_fq_codel")
 
+	// Rebuild from a clean root so stale filters/classes from previous limits
+	// cannot keep matching after a client or inbound is edited.
+	_ = run("tc", "qdisc", "del", "dev", dev, "root")
+
 	if err := run("tc", "qdisc", "replace", "dev", dev, "root", "handle", rootHandle, "htb", "default", "1"); err != nil {
 		return err
 	}
@@ -156,6 +160,10 @@ func ReconcileConnections(dev string, rules []ConnectionRule, run Runner) error 
 	}
 	_ = run("modprobe", "cls_flower")
 	_ = run("modprobe", "sch_fq_codel")
+
+	// Rebuild from a clean root so stale per-connection filters disappear when
+	// a user changes limits or a live connection expires from the agent cache.
+	_ = run("tc", "qdisc", "del", "dev", dev, "root")
 
 	if err := run("tc", "qdisc", "replace", "dev", dev, "root", "handle", connectionRootHandle, "htb", "default", "1"); err != nil {
 		return err

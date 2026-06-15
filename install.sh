@@ -1320,9 +1320,19 @@ install_x-ui() {
             echo -e "${green}Setting up systemd unit...${plain}"
             chown root:root ${xui_service}/x-ui.service > /dev/null 2>&1
             chmod 644 ${xui_service}/x-ui.service > /dev/null 2>&1
+            if [[ -f "xui-speed-agent" && -f "xui-speed-agent.service" ]]; then
+                echo -e "${green}Setting up xui-speed-agent systemd unit...${plain}"
+                cp -f xui-speed-agent.service ${xui_service}/xui-speed-agent.service > /dev/null 2>&1
+                chown root:root ${xui_service}/xui-speed-agent.service > /dev/null 2>&1
+                chmod 644 ${xui_service}/xui-speed-agent.service > /dev/null 2>&1
+            fi
             systemctl daemon-reload
             systemctl enable x-ui
             systemctl start x-ui
+            if [[ -f "${xui_service}/xui-speed-agent.service" ]]; then
+                systemctl enable xui-speed-agent
+                systemctl restart xui-speed-agent
+            fi
         else
             echo -e "${red}Failed to install x-ui.service file${plain}"
             exit 1

@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
@@ -74,6 +75,7 @@ func main() {
 	observed := map[string]liveObservation{}
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
+	lastRulesKey := ""
 
 	log.Printf("xui-speed-agent watching %s on %s, db=%s", *accessPath, *dev, *dbPath)
 	for {
@@ -90,9 +92,15 @@ func main() {
 				continue
 			}
 			rules := buildRules(observed, speeds, *ttl)
+			rulesKey := fingerprintRules(rules)
+			if rulesKey == lastRulesKey {
+				continue
+			}
 			if err := speedlimit.ReconcileConnections(*dev, rules, commandRunner); err != nil {
 				log.Printf("reconcile tc: %v", err)
+				continue
 			}
+			lastRulesKey = rulesKey
 		case <-ctx.Done():
 			return
 		}
@@ -151,6 +159,18 @@ func buildRules(observed map[string]liveObservation, speeds map[string]int, ttl 
 		})
 	}
 	return rules
+}
+
+func fingerprintRules(rules []speedlimit.ConnectionRule) string {
+	if len(rules) == 0 {
+		return "empty"
+	}
+	parts := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		parts = append(parts, fmt.Sprintf("%s|%s|%d|%s|%d", rule.Email, rule.IP, rule.Port, rule.Proto, rule.KBps))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\n")
 }
 
 func tailAccessLog(ctx context.Context, path string, startAtEnd bool, lines chan<- string) {

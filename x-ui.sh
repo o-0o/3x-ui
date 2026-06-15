@@ -228,8 +228,11 @@ uninstall() {
         rc-update del x-ui
         rm /etc/init.d/x-ui -f
     else
+        systemctl stop xui-speed-agent > /dev/null 2>&1
+        systemctl disable xui-speed-agent > /dev/null 2>&1
         systemctl stop x-ui
         systemctl disable x-ui
+        rm ${xui_service}/xui-speed-agent.service -f
         rm ${xui_service}/x-ui.service -f
         systemctl daemon-reload
         systemctl reset-failed

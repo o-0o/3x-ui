@@ -72,6 +72,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/bulkDel", a.bulkDelInbounds)
 	g.POST("/update/:id", a.updateInbound)
+	g.POST("/:id/cloneToNode", a.cloneInboundToNode)
 	g.POST("/setEnable/:id", a.setInboundEnable)
 	g.POST("/:id/resetTraffic", a.resetInboundTraffic)
 	g.POST("/:id/delAllClients", a.delAllInboundClients)
@@ -79,6 +80,34 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/import", a.importInbound)
 	g.POST("/:id/fallbacks", a.setFallbacks)
 	g.POST("/pushClientTraffics", a.pushClientTraffics)
+}
+
+type cloneInboundToNodeRequest struct {
+	TargetNodeID int `json:"targetNodeId" form:"targetNodeId" binding:"required,min=1"`
+}
+
+func (a *InboundController) cloneInboundToNode(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	var req cloneInboundToNodeRequest
+	// Accept both JSON from the current UI and form-encoded requests from older
+	// cached frontend bundles during rolling panel updates.
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	created, err := a.inboundService.CloneInboundToNode(c.Request.Context(), id, req.TargetNodeID)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), created, nil)
+	user := session.GetLoginUser(c)
+	a.broadcastInboundsUpdate(user.Id)
+	notifyClientsChanged()
 }
 
 // getInbounds retrieves the list of inbounds for the logged-in user.

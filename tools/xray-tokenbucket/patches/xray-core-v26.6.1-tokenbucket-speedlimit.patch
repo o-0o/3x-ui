@@ -1,0 +1,403 @@
+diff --git a/app/dispatcher/default.go b/app/dispatcher/default.go
+index f6cfd76..e8ac1a7 100644
+--- a/app/dispatcher/default.go
++++ b/app/dispatcher/default.go
+@@ -6,6 +6,7 @@ import (
+ 	"sync"
+ 	"time"
+ 
++	"github.com/xtls/xray-core/app/limiter"
+ 	"github.com/xtls/xray-core/common"
+ 	"github.com/xtls/xray-core/common/buf"
+ 	"github.com/xtls/xray-core/common/errors"
+@@ -182,6 +183,10 @@ func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *tran
+ 		if p.Stats.UserOnline {
+ 			trackOnlineIP(ctx, d.stats, user.Email, sessionInbound.Source.Address.String())
+ 		}
++		if user.SpeedLimit > 0 {
++			inboundLink.Writer = limiter.NewUserRateLimitWriter(ctx, inboundLink.Writer, user.Email, "uplink", user.SpeedLimit)
++			outboundLink.Writer = limiter.NewUserRateLimitWriter(ctx, outboundLink.Writer, user.Email, "downlink", user.SpeedLimit)
++		}
+ 	}
+ 
+ 	return inboundLink, outboundLink
+@@ -216,6 +221,9 @@ func WrapLink(ctx context.Context, policyManager policy.Manager, statsManager st
+ 		if p.Stats.UserOnline {
+ 			trackOnlineIP(ctx, statsManager, user.Email, sessionInbound.Source.Address.String())
+ 		}
++		if user.SpeedLimit > 0 {
++			link.Writer = limiter.NewUserRateLimitWriter(ctx, link.Writer, user.Email, "downlink", user.SpeedLimit)
++		}
+ 	}
+ 
+ 	return link
+diff --git a/app/limiter/manager.go b/app/limiter/manager.go
+new file mode 100644
+index 0000000..d4dbabb
+--- /dev/null
++++ b/app/limiter/manager.go
+@@ -0,0 +1,60 @@
++package limiter
++
++import (
++	"context"
++	"fmt"
++	"math"
++	"sync"
++
++	"github.com/xtls/xray-core/common/buf"
++	"golang.org/x/time/rate"
++)
++
++var userBuckets sync.Map
++
++type userBucket struct {
++	mu      sync.Mutex
++	limit   uint64
++	limiter *rate.Limiter
++}
++
++func NewUserRateLimitWriter(ctx context.Context, writer buf.Writer, email, direction string, bytesPerSecond uint64) buf.Writer {
++	if bytesPerSecond == 0 || email == "" || writer == nil {
++		return writer
++	}
++	bucket := getUserBucket(email, direction, bytesPerSecond)
++	return NewRateLimitWriterWithLimiter(ctx, writer, bucket.limiter)
++}
++
++func getUserBucket(email, direction string, bytesPerSecond uint64) *userBucket {
++	key := fmt.Sprintf("%s\x00%s", email, direction)
++	actual, _ := userBuckets.LoadOrStore(key, &userBucket{
++		limit:   bytesPerSecond,
++		limiter: NewLimiter(bytesPerSecond),
++	})
++	bucket := actual.(*userBucket)
++	bucket.update(bytesPerSecond)
++	return bucket
++}
++
++func (b *userBucket) update(bytesPerSecond uint64) {
++	b.mu.Lock()
++	defer b.mu.Unlock()
++	if b.limit == bytesPerSecond {
++		return
++	}
++	b.limit = bytesPerSecond
++	b.limiter.SetLimit(rate.Limit(bytesPerSecond))
++	b.limiter.SetBurst(limiterBurst(bytesPerSecond))
++}
++
++func limiterBurst(bytesPerSecond uint64) int {
++	burst := int(bytesPerSecond)
++	if bytesPerSecond > uint64(math.MaxInt) {
++		burst = math.MaxInt
++	}
++	if burst < 1 {
++		burst = 1
++	}
++	return burst
++}
+diff --git a/app/limiter/rate.go b/app/limiter/rate.go
+new file mode 100644
+index 0000000..75babaf
+--- /dev/null
++++ b/app/limiter/rate.go
+@@ -0,0 +1,70 @@
++package limiter
++
++import (
++	"context"
++
++	"github.com/xtls/xray-core/common"
++	"github.com/xtls/xray-core/common/buf"
++	"golang.org/x/time/rate"
++)
++
++// RateLimitWriter wraps a buf.Writer with a byte-token bucket. The limit is in
++// bytes per second and applies to every WriteMultiBuffer call that passes
++// through this writer.
++type RateLimitWriter struct {
++	writer  buf.Writer
++	limiter *rate.Limiter
++	ctx     context.Context
++}
++
++func NewRateLimitWriter(ctx context.Context, writer buf.Writer, bytesPerSecond uint64) buf.Writer {
++	if bytesPerSecond == 0 || writer == nil {
++		return writer
++	}
++	return NewRateLimitWriterWithLimiter(ctx, writer, NewLimiter(bytesPerSecond))
++}
++
++func NewRateLimitWriterWithLimiter(ctx context.Context, writer buf.Writer, limiter *rate.Limiter) buf.Writer {
++	if limiter == nil || writer == nil {
++		return writer
++	}
++	if ctx == nil {
++		ctx = context.Background()
++	}
++	return &RateLimitWriter{
++		writer:  writer,
++		limiter: limiter,
++		ctx:     ctx,
++	}
++}
++
++func NewLimiter(bytesPerSecond uint64) *rate.Limiter {
++	return rate.NewLimiter(rate.Limit(bytesPerSecond), limiterBurst(bytesPerSecond))
++}
++
++func (w *RateLimitWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
++	if mb.IsEmpty() {
++		return w.writer.WriteMultiBuffer(mb)
++	}
++	remaining := int64(mb.Len())
++	for remaining > 0 {
++		n := remaining
++		if n > int64(w.limiter.Burst()) {
++			n = int64(w.limiter.Burst())
++		}
++		if err := w.limiter.WaitN(w.ctx, int(n)); err != nil {
++			buf.ReleaseMulti(mb)
++			return err
++		}
++		remaining -= n
++	}
++	return w.writer.WriteMultiBuffer(mb)
++}
++
++func (w *RateLimitWriter) Close() error {
++	return common.Close(w.writer)
++}
++
++func (w *RateLimitWriter) Interrupt() {
++	common.Interrupt(w.writer)
++}
+diff --git a/common/protocol/user.go b/common/protocol/user.go
+index 75e8e65..3c1f02f 100644
+--- a/common/protocol/user.go
++++ b/common/protocol/user.go
+@@ -29,9 +29,10 @@ func (u *User) ToMemoryUser() (*MemoryUser, error) {
+ 		return nil, err
+ 	}
+ 	return &MemoryUser{
+-		Account: account,
+-		Email:   u.Email,
+-		Level:   u.Level,
++		Account:    account,
++		Email:      u.Email,
++		Level:      u.Level,
++		SpeedLimit: u.SpeedLimit,
+ 	}, nil
+ }
+ 
+@@ -40,16 +41,18 @@ func ToProtoUser(mu *MemoryUser) *User {
+ 		return nil
+ 	}
+ 	return &User{
+-		Account: serial.ToTypedMessage(mu.Account.ToProto()),
+-		Email:   mu.Email,
+-		Level:   mu.Level,
++		Account:    serial.ToTypedMessage(mu.Account.ToProto()),
++		Email:      mu.Email,
++		Level:      mu.Level,
++		SpeedLimit: mu.SpeedLimit,
+ 	}
+ }
+ 
+ // MemoryUser is a parsed form of User, to reduce number of parsing of Account proto.
+ type MemoryUser struct {
+ 	// Account is the parsed account of the protocol.
+-	Account Account
+-	Email   string
+-	Level   uint32
++	Account    Account
++	Email      string
++	Level      uint32
++	SpeedLimit uint64
+ }
+diff --git a/common/protocol/user.proto b/common/protocol/user.proto
+index 14cf995..f727d63 100644
+--- a/common/protocol/user.proto
++++ b/common/protocol/user.proto
+@@ -16,4 +16,7 @@ message User {
+   // Protocol specific account information. Must be the account proto in one of
+   // the proxies.
+   xray.common.serial.TypedMessage account = 3;
++
++  // Speed limit in bytes per second for this user. 0 means unlimited.
++  uint64 speed_limit = 4;
+ }
+diff --git a/infra/conf/common.go b/infra/conf/common.go
+index 0de3568..4cebbbd 100644
+--- a/infra/conf/common.go
++++ b/infra/conf/common.go
+@@ -277,12 +277,14 @@ func (list *PortList) UnmarshalJSON(data []byte) error {
+ type User struct {
+ 	EmailString string `json:"email"`
+ 	LevelByte   byte   `json:"level"`
++	SpeedLimit  uint64 `json:"speedLimit"`
+ }
+ 
+ func (v *User) Build() *protocol.User {
+ 	return &protocol.User{
+-		Email: v.EmailString,
+-		Level: uint32(v.LevelByte),
++		Email:      v.EmailString,
++		Level:      uint32(v.LevelByte),
++		SpeedLimit: v.SpeedLimit,
+ 	}
+ }
+ 
+diff --git a/infra/conf/hysteria.go b/infra/conf/hysteria.go
+index 744338d..11b6b5a 100644
+--- a/infra/conf/hysteria.go
++++ b/infra/conf/hysteria.go
+@@ -32,9 +32,10 @@ func (c *HysteriaClientConfig) Build() (proto.Message, error) {
+ }
+ 
+ type HysteriaUserConfig struct {
+-	Auth  string `json:"auth"`
+-	Level uint32 `json:"level"`
+-	Email string `json:"email"`
++	Auth       string `json:"auth"`
++	Level      uint32 `json:"level"`
++	Email      string `json:"email"`
++	SpeedLimit uint64 `json:"speedLimit"`
+ }
+ 
+ type HysteriaServerConfig struct {
+@@ -57,9 +58,10 @@ func (c *HysteriaServerConfig) Build() (proto.Message, error) {
+ 				Auth: user.Auth,
+ 			}
+ 			config.Users[idx] = &protocol.User{
+-				Email:   user.Email,
+-				Level:   user.Level,
+-				Account: serial.ToTypedMessage(acc),
++				Email:      user.Email,
++				Level:      user.Level,
++				SpeedLimit: user.SpeedLimit,
++				Account:    serial.ToTypedMessage(acc),
+ 			}
+ 			return nil
+ 		}
+diff --git a/infra/conf/shadowsocks.go b/infra/conf/shadowsocks.go
+index 30a7fd6..79076ef 100644
+--- a/infra/conf/shadowsocks.go
++++ b/infra/conf/shadowsocks.go
+@@ -32,12 +32,13 @@ func cipherFromString(c string) shadowsocks.CipherType {
+ }
+ 
+ type ShadowsocksUserConfig struct {
+-	Cipher   string   `json:"method"`
+-	Password string   `json:"password"`
+-	Level    byte     `json:"level"`
+-	Email    string   `json:"email"`
+-	Address  *Address `json:"address"`
+-	Port     uint16   `json:"port"`
++	Cipher     string   `json:"method"`
++	Password   string   `json:"password"`
++	Level      byte     `json:"level"`
++	Email      string   `json:"email"`
++	Address    *Address `json:"address"`
++	Port       uint16   `json:"port"`
++	SpeedLimit uint64   `json:"speedLimit"`
+ }
+ 
+ type ShadowsocksServerConfig struct {
+@@ -81,9 +82,10 @@ func (v *ShadowsocksServerConfig) Build() (proto.Message, error) {
+ 					return errors.New("unsupported cipher method: ", user.Cipher)
+ 				}
+ 				config.Users[idx] = &protocol.User{
+-					Email:   user.Email,
+-					Level:   uint32(user.Level),
+-					Account: serial.ToTypedMessage(account),
++					Email:      user.Email,
++					Level:      uint32(user.Level),
++					SpeedLimit: user.SpeedLimit,
++					Account:    serial.ToTypedMessage(account),
+ 				}
+ 				return nil
+ 			}
+@@ -145,9 +147,10 @@ func buildShadowsocks2022(v *ShadowsocksServerConfig) (proto.Message, error) {
+ 				Key: user.Password,
+ 			}
+ 			config.Users[idx] = &protocol.User{
+-				Email:   user.Email,
+-				Level:   uint32(user.Level),
+-				Account: serial.ToTypedMessage(account),
++				Email:      user.Email,
++				Level:      uint32(user.Level),
++				SpeedLimit: user.SpeedLimit,
++				Account:    serial.ToTypedMessage(account),
+ 			}
+ 			return nil
+ 		}
+diff --git a/infra/conf/trojan.go b/infra/conf/trojan.go
+index 0848137..851e951 100644
+--- a/infra/conf/trojan.go
++++ b/infra/conf/trojan.go
+@@ -104,10 +104,11 @@ type TrojanInboundFallback struct {
+ 
+ // TrojanUserConfig is user configuration
+ type TrojanUserConfig struct {
+-	Password string `json:"password"`
+-	Level    byte   `json:"level"`
+-	Email    string `json:"email"`
+-	Flow     string `json:"flow"`
++	Password   string `json:"password"`
++	Level      byte   `json:"level"`
++	Email      string `json:"email"`
++	Flow       string `json:"flow"`
++	SpeedLimit uint64 `json:"speedLimit"`
+ }
+ 
+ // TrojanServerConfig is Inbound configuration
+@@ -136,8 +137,9 @@ func (c *TrojanServerConfig) Build() (proto.Message, error) {
+ 		}
+ 
+ 		config.Users[idx] = &protocol.User{
+-			Level: uint32(rawUser.Level),
+-			Email: rawUser.Email,
++			Level:      uint32(rawUser.Level),
++			Email:      rawUser.Email,
++			SpeedLimit: rawUser.SpeedLimit,
+ 			Account: serial.ToTypedMessage(&trojan.Account{
+ 				Password: rawUser.Password,
+ 			}),
+diff --git a/infra/conf/vless.go b/infra/conf/vless.go
+index 1c8abab..14919d5 100644
+--- a/infra/conf/vless.go
++++ b/infra/conf/vless.go
+@@ -54,10 +54,11 @@ func (c *VLessInboundConfig) Build() (proto.Message, error) {
+ 	}
+ 	processClient := func(idx int) error {
+ 		rawUser := c.Users[idx]
+-		user := new(protocol.User)
+-		if err := json.Unmarshal(rawUser, user); err != nil {
++		var userConfig User
++		if err := json.Unmarshal(rawUser, &userConfig); err != nil {
+ 			return errors.New(`VLESS users: invalid user`).Base(err)
+ 		}
++		user := userConfig.Build()
+ 		account := new(vless.Account)
+ 		if err := json.Unmarshal(rawUser, account); err != nil {
+ 			return errors.New(`VLESS users: invalid user`).Base(err)
+diff --git a/infra/conf/vmess.go b/infra/conf/vmess.go
+index a73883b..7a895cd 100644
+--- a/infra/conf/vmess.go
++++ b/infra/conf/vmess.go
+@@ -80,10 +80,11 @@ func (c *VMessInboundConfig) Build() (proto.Message, error) {
+ 	config.User = make([]*protocol.User, len(c.Users))
+ 	processUser := func(idx int) error {
+ 		rawData := c.Users[idx]
+-		user := new(protocol.User)
+-		if err := json.Unmarshal(rawData, user); err != nil {
++		var userConfig User
++		if err := json.Unmarshal(rawData, &userConfig); err != nil {
+ 			return errors.New("invalid VMess user").Base(err)
+ 		}
++		user := userConfig.Build()
+ 		account := new(VMessAccount)
+ 		if err := json.Unmarshal(rawData, account); err != nil {
+ 			return errors.New("invalid VMess user").Base(err)

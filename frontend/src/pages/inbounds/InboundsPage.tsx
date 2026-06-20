@@ -9,6 +9,7 @@ import {
   Modal,
   Result,
   Row,
+  Select,
   Spin,
   Statistic,
   message,
@@ -60,6 +61,7 @@ type RowAction =
   | 'attachExisting'
   | 'detachClients'
   | 'addToGroup'
+  | 'prepareFailover'
   | 'clone';
 
 type GeneralAction = 'import' | 'export' | 'subs' | 'resetInbounds';
@@ -473,6 +475,49 @@ export default function InboundsPage() {
     });
   }, [modal, refresh, t]);
 
+  const prepareFailover = useCallback((dbInbound: DBInbound) => {
+    if (dbInbound.shareAddrStrategy !== 'custom' || !dbInbound.shareAddr?.trim()) {
+      messageApi.warning(t('pages.inbounds.failoverRequiresCustomAddress'));
+      return;
+    }
+    const candidates = (nodesList || []).filter((node) => (
+      node.id !== dbInbound.nodeId && node.enable && node.status === 'online' && !node.transitive
+    ));
+    if (candidates.length === 0) {
+      messageApi.warning(t('pages.inbounds.noFailoverNode'));
+      return;
+    }
+    let targetNodeId: number | undefined;
+    modal.confirm({
+      title: t('pages.inbounds.prepareFailoverTitle', { remark: dbInbound.remark }),
+      content: (
+        <div>
+          <p>{t('pages.inbounds.prepareFailoverHelp', { address: dbInbound.shareAddr })}</p>
+          <Select
+            style={{ width: '100%' }}
+            placeholder={t('pages.inbounds.selectTargetNode')}
+            options={candidates.map((node) => ({ value: node.id, label: node.name }))}
+            onChange={(value) => { targetNodeId = value; }}
+          />
+        </div>
+      ),
+      okText: t('pages.inbounds.prepareFailover'),
+      cancelText: t('cancel'),
+      onOk: async () => {
+        if (!targetNodeId) {
+          messageApi.error(t('pages.inbounds.selectTargetNode'));
+          return Promise.reject();
+        }
+        const msg = await HttpUtil.post(`/panel/api/inbounds/${dbInbound.id}/cloneToNode`, {
+          targetNodeId,
+        }, { headers: { 'Content-Type': 'application/json' } });
+        if (!msg?.success) return Promise.reject();
+        await refresh();
+        messageApi.success(t('pages.inbounds.prepareFailoverSuccess'));
+      },
+    });
+  }, [messageApi, modal, nodesList, refresh, t]);
+
   const onGeneralAction = useCallback((key: GeneralAction) => {
     switch (key) {
       case 'import': importInbound(); break;
@@ -498,7 +543,7 @@ export default function InboundsPage() {
     // Actions that touch per-client secrets (uuid, password, flow, ...) need
     // the full payload that the slim list view does not ship. Hydrate first
     // and then operate on the rehydrated record.
-    const hydratingKeys: RowAction[] = ['edit', 'showInfo', 'qrcode', 'export', 'subs', 'clipboard', 'clone', 'attachClients', 'addToGroup'];
+    const hydratingKeys: RowAction[] = ['edit', 'showInfo', 'qrcode', 'export', 'subs', 'clipboard', 'clone', 'prepareFailover', 'attachClients', 'addToGroup'];
     let target = dbInbound;
     if (hydratingKeys.includes(key)) {
       const hydrated = await hydrateInbound(dbInbound.id);
@@ -554,10 +599,13 @@ export default function InboundsPage() {
       case 'clone':
         confirmClone(target);
         break;
+      case 'prepareFailover':
+        prepareFailover(target);
+        break;
       default:
         messageApi.info(`Action "${key}" — coming in a later 5f subphase`);
     }
-  }, [hydrateInbound, openEdit, checkFallback, findClientIndex, exportInboundLinks, exportInboundSubs, exportInboundClipboard, confirmDelete, confirmResetTraffic, confirmDelAllClients, confirmClone, messageApi]);
+  }, [hydrateInbound, openEdit, checkFallback, findClientIndex, exportInboundLinks, exportInboundSubs, exportInboundClipboard, confirmDelete, confirmResetTraffic, confirmDelAllClients, confirmClone, prepareFailover, messageApi]);
 
   return (
     <ConfigProvider theme={antdThemeConfig}>

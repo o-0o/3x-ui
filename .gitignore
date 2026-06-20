@@ -18,6 +18,7 @@ backup/
 bin/
 x-ui/
 dist/
+tools/xray-tokenbucket/dist/
 !internal/web/dist/
 internal/web/dist/*
 !internal/web/dist/.gitkeep

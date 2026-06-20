@@ -7,6 +7,7 @@ import {
   CopyOutlined,
   ExportOutlined,
   RetweetOutlined,
+  SwapOutlined,
   BlockOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
@@ -49,6 +50,9 @@ export function buildRowActionsMenu({ record, subEnable, t, isMobile, hasClients
   items.push({ key: 'clipboard', icon: <CopyOutlined />, label: t('pages.inbounds.exportInbound') });
   items.push({ key: 'resetTraffic', icon: <RetweetOutlined />, label: t('pages.inbounds.resetTraffic') });
   items.push({ key: 'clone', icon: <BlockOutlined />, label: t('pages.inbounds.clone') });
+  if (record.nodeId != null) {
+    items.push({ key: 'prepareFailover', icon: <SwapOutlined />, label: t('pages.inbounds.prepareFailover') });
+  }
   if (isInboundMultiUser(record)) {
     items.push({ key: 'attachExisting', icon: <UsergroupAddOutlined />, label: t('pages.inbounds.attachExistingClients') });
   }

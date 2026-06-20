@@ -531,16 +531,20 @@ func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (b
 					cipher = oldSettings["method"].(string)
 				}
 				err1 := rt.AddUser(context.Background(), inbound, map[string]any{
-					"email":    client.Email,
-					"id":       client.ID,
-					"auth":     client.Auth,
-					"security": client.Security,
-					"flow":     client.Flow,
-					"password": client.Password,
-					"cipher":   cipher,
+					"email":      client.Email,
+					"id":         client.ID,
+					"auth":       client.Auth,
+					"security":   client.Security,
+					"flow":       client.Flow,
+					"password":   client.Password,
+					"cipher":     cipher,
+					"speedLimit": client.SpeedLimit,
 				})
 				if err1 == nil {
 					logger.Debug("Client enabled on", rt.Name(), "due to reset traffic:", clientEmail)
+					if client.SpeedLimit > 0 {
+						needRestart = true
+					}
 				} else if inbound.NodeID != nil {
 					logger.Warning("Error in enabling client on", rt.Name(), ":", err1)
 					if dErr := (&NodeService{}).MarkNodeDirty(*inbound.NodeID); dErr != nil {

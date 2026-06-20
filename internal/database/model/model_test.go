@@ -94,6 +94,23 @@ func TestInboundMarshalJSONInvalidTextFallsBackToString(t *testing.T) {
 	}
 }
 
+func TestClientSpeedLimitRoundTripRecord(t *testing.T) {
+	client := &Client{
+		ID:         "11111111-1111-4111-8111-111111111111",
+		Email:      "speed@example.com",
+		SpeedLimit: 1024 * 1024,
+		Enable:     true,
+	}
+	record := client.ToRecord()
+	if record.SpeedLimit != client.SpeedLimit {
+		t.Fatalf("ToRecord dropped speed limit: got %d want %d", record.SpeedLimit, client.SpeedLimit)
+	}
+	roundTrip := record.ToClient()
+	if roundTrip.SpeedLimit != client.SpeedLimit {
+		t.Fatalf("ToClient dropped speed limit: got %d want %d", roundTrip.SpeedLimit, client.SpeedLimit)
+	}
+}
+
 func TestClientRecordMarshalJSONNestsReverse(t *testing.T) {
 	rec := ClientRecord{Id: 1, Email: "alice@example.com", Reverse: `{"tag":"vless-in"}`}
 	out, err := json.Marshal(rec)

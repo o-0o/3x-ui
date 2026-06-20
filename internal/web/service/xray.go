@@ -164,6 +164,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				flow = "xtls-rprx-vision"
 			}
 			entry := map[string]any{"email": c.Email}
+			if c.SpeedLimit > 0 {
+				entry["speedLimit"] = c.SpeedLimit
+			}
 			switch inbound.Protocol {
 			case model.VLESS:
 				if c.ID != "" {

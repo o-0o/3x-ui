@@ -26,6 +26,7 @@ interface ClientBaseSeed {
   subId?: string;
   limitIp?: number;
   totalGB?: number;
+  speedLimit?: number;
   expiryTime?: number;
   enable?: boolean;
   tgId?: number;
@@ -37,6 +38,7 @@ interface ClientBase {
   email: string;
   limitIp: number;
   totalGB: number;
+  speedLimit: number;
   expiryTime: number;
   enable: boolean;
   tgId: number;
@@ -50,6 +52,7 @@ function clientBase(seed: ClientBaseSeed = {}): ClientBase {
     email: seed.email ?? RandomUtil.randomLowerAndNum(10),
     limitIp: seed.limitIp ?? 0,
     totalGB: seed.totalGB ?? 0,
+    speedLimit: seed.speedLimit ?? 0,
     expiryTime: seed.expiryTime ?? 0,
     enable: seed.enable ?? true,
     tgId: seed.tgId ?? 0,

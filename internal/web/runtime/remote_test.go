@@ -42,10 +42,10 @@ func TestWireInboundIncludesShareAddressFields(t *testing.T) {
 		ShareAddr:         "edge.example.com",
 	})
 
-	if got := values.Get("shareAddrStrategy"); got != "custom" {
+	if got := values["shareAddrStrategy"]; got != "custom" {
 		t.Fatalf("shareAddrStrategy = %q, want custom", got)
 	}
-	if got := values.Get("shareAddr"); got != "edge.example.com" {
+	if got := values["shareAddr"]; got != "edge.example.com" {
 		t.Fatalf("shareAddr = %q, want edge.example.com", got)
 	}
 }
@@ -53,13 +53,39 @@ func TestWireInboundIncludesShareAddressFields(t *testing.T) {
 func TestWireInboundDefaultsShareAddressStrategy(t *testing.T) {
 	values := wireInbound(&model.Inbound{})
 
-	if got := values.Get("shareAddrStrategy"); got != "node" {
+	if got := values["shareAddrStrategy"]; got != "node" {
 		t.Fatalf("shareAddrStrategy = %q, want node", got)
 	}
 
 	values = wireInbound(&model.Inbound{ShareAddrStrategy: "auto"})
-	if got := values.Get("shareAddrStrategy"); got != "node" {
+	if got := values["shareAddrStrategy"]; got != "node" {
 		t.Fatalf("invalid shareAddrStrategy = %q, want node", got)
+	}
+}
+
+func TestWireInboundJSONRoundTrip(t *testing.T) {
+	payload := wireInbound(&model.Inbound{
+		Remark:            "backup",
+		Enable:            true,
+		Port:              15383,
+		Protocol:          model.VLESS,
+		Settings:          `{"clients":[{"email":"alice"}],"decryption":"none"}`,
+		StreamSettings:    `{"network":"tcp","security":"reality"}`,
+		Sniffing:          `{"enabled":false}`,
+		TrafficReset:      "never",
+		ShareAddrStrategy: "custom",
+		ShareAddr:         "edge.example.com",
+	})
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal wire payload: %v", err)
+	}
+	var decoded model.Inbound
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal wire payload: %v", err)
+	}
+	if decoded.Settings != payload["settings"] || decoded.StreamSettings != payload["streamSettings"] || decoded.Sniffing != payload["sniffing"] {
+		t.Fatalf("JSON fields did not round trip: %#v", decoded)
 	}
 }
 

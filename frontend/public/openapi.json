@@ -2551,6 +2551,60 @@
         }
       }
     },
+    "/panel/api/inbounds/{id}/cloneToNode": {
+      "post": {
+        "tags": [
+          "Inbounds"
+        ],
+        "summary": "Prepare a failover copy on another online node. Copies the full inbound and all client credentials, preserves its custom share address, resets node-local traffic counters, and leaves the source inbound running. Requires shareAddrStrategy=custom. After testing the target, switch the share domain DNS separately.",
+        "operationId": "post_panel_api_inbounds_id_cloneToNode",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Source inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "targetNodeId": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/inbounds/setEnable/{id}": {
       "post": {
         "tags": [

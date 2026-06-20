@@ -168,6 +168,15 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/inbounds/:id/cloneToNode',
+        summary: 'Prepare a failover copy on another online node. Copies the full inbound and all client credentials, preserves its custom share address, resets node-local traffic counters, and leaves the source inbound running. Requires shareAddrStrategy=custom. After testing the target, switch the share domain DNS separately.',
+        params: [
+          { name: 'id', in: 'path', type: 'number', desc: 'Source inbound ID.' },
+        ],
+        body: '{\n  "targetNodeId": 2\n}',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/inbounds/setEnable/:id',
         summary: 'Toggle only the enable flag without serialising the whole settings JSON. Recommended for UI switches on large inbounds.',
         params: [

@@ -496,30 +496,31 @@ func (r *Remote) PushGlobalClientTraffics(ctx context.Context, masterGuid string
 	return err
 }
 
-func wireInbound(ib *model.Inbound) url.Values {
-	v := url.Values{}
-	v.Set("total", strconv.FormatInt(ib.Total, 10))
-	v.Set("remark", ib.Remark)
-	v.Set("subSortIndex", strconv.Itoa(ib.SubSortIndex))
-	v.Set("enable", strconv.FormatBool(ib.Enable))
-	v.Set("expiryTime", strconv.FormatInt(ib.ExpiryTime, 10))
-	v.Set("listen", ib.Listen)
-	v.Set("port", strconv.Itoa(ib.Port))
-	v.Set("protocol", string(ib.Protocol))
-	v.Set("settings", ib.Settings)
-	v.Set("streamSettings", sanitizeStreamSettingsForRemote(ib.StreamSettings))
-	v.Set("tag", ib.Tag)
-	v.Set("sniffing", ib.Sniffing)
+func wireInbound(ib *model.Inbound) map[string]any {
+	v := map[string]any{
+		"total":          ib.Total,
+		"remark":         ib.Remark,
+		"subSortIndex":   ib.SubSortIndex,
+		"enable":         ib.Enable,
+		"expiryTime":     ib.ExpiryTime,
+		"listen":         ib.Listen,
+		"port":           ib.Port,
+		"protocol":       ib.Protocol,
+		"settings":       ib.Settings,
+		"streamSettings": sanitizeStreamSettingsForRemote(ib.StreamSettings),
+		"tag":            ib.Tag,
+		"sniffing":       ib.Sniffing,
+	}
 	shareAddrStrategy := strings.TrimSpace(ib.ShareAddrStrategy)
 	switch shareAddrStrategy {
 	case "listen", "custom":
 	default:
 		shareAddrStrategy = "node"
 	}
-	v.Set("shareAddrStrategy", shareAddrStrategy)
-	v.Set("shareAddr", ib.ShareAddr)
+	v["shareAddrStrategy"] = shareAddrStrategy
+	v["shareAddr"] = ib.ShareAddr
 	if ib.TrafficReset != "" {
-		v.Set("trafficReset", ib.TrafficReset)
+		v["trafficReset"] = ib.TrafficReset
 	}
 	return v
 }

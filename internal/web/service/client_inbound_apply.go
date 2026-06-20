@@ -344,16 +344,20 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 					cipher = oldSettings["method"].(string)
 				}
 				err1 := rt.AddUser(context.Background(), oldInbound, map[string]any{
-					"email":    client.Email,
-					"id":       client.ID,
-					"auth":     client.Auth,
-					"security": client.Security,
-					"flow":     client.Flow,
-					"password": client.Password,
-					"cipher":   cipher,
+					"email":      client.Email,
+					"id":         client.ID,
+					"auth":       client.Auth,
+					"security":   client.Security,
+					"flow":       client.Flow,
+					"password":   client.Password,
+					"cipher":     cipher,
+					"speedLimit": client.SpeedLimit,
 				})
 				if err1 == nil {
 					logger.Debug("Client added on", rt.Name(), ":", client.Email)
+					if client.SpeedLimit > 0 {
+						needRestart = true
+					}
 				} else {
 					logger.Debug("Error in adding client on", rt.Name(), ":", err1)
 					needRestart = true
@@ -370,6 +374,11 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 					logger.Warning("Error in adding client on", rt.Name(), ":", err1)
 					markDirty = true
 					push = false
+				} else if client.SpeedLimit > 0 {
+					if err2 := rt.RestartXray(context.Background()); err2 != nil {
+						logger.Warning("Error in restarting xray on", rt.Name(), "after adding speed-limited client:", err2)
+						markDirty = true
+					}
 				}
 			}
 		}
@@ -601,6 +610,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 			markDirty = true
 		}
 		if oldInbound.NodeID == nil {
+			if oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0 {
+				needRestart = true
+			}
 			if !push {
 				needRestart = true
 			} else {
@@ -621,13 +633,14 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 						cipher = oldSettings["method"].(string)
 					}
 					err1 := rt.AddUser(context.Background(), oldInbound, map[string]any{
-						"email":    clients[0].Email,
-						"id":       clients[0].ID,
-						"security": clients[0].Security,
-						"flow":     clients[0].Flow,
-						"auth":     clients[0].Auth,
-						"password": clients[0].Password,
-						"cipher":   cipher,
+						"email":      clients[0].Email,
+						"id":         clients[0].ID,
+						"security":   clients[0].Security,
+						"flow":       clients[0].Flow,
+						"auth":       clients[0].Auth,
+						"password":   clients[0].Password,
+						"cipher":     cipher,
+						"speedLimit": clients[0].SpeedLimit,
 					})
 					if err1 == nil {
 						logger.Debug("Client edited on", rt.Name(), ":", clients[0].Email)
@@ -641,6 +654,11 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 			if err1 := rt.UpdateUser(context.Background(), oldInbound, oldEmail, clients[0]); err1 != nil {
 				logger.Warning("Error in updating client on", rt.Name(), ":", err1)
 				markDirty = true
+			} else if oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0 {
+				if err2 := rt.RestartXray(context.Background()); err2 != nil {
+					logger.Warning("Error in restarting xray on", rt.Name(), "after updating speed-limited client:", err2)
+					markDirty = true
+				}
 			}
 		}
 	} else {

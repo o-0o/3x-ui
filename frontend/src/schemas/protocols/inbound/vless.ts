@@ -17,6 +17,7 @@ export const VlessClientSchema = z.object({
   flow: FlowSchema.default(''),
   limitIp: z.number().int().min(0).default(0),
   totalGB: z.number().int().min(0).default(0),
+  speedLimit: z.number().int().min(0).default(0),
   expiryTime: z.number().int().default(0),
   enable: z.boolean().default(true),
   tgId: z.union([z.number(), z.string()]).transform((v) => Number(v) || 0).default(0),

@@ -88,6 +88,7 @@ interface FormState {
   security: string;
   reverseTag: string;
   totalGB: number;
+  speedLimitMB: number;
   expiryDate: Dayjs | null;
   delayedStart: boolean;
   delayedDays: number;
@@ -111,6 +112,7 @@ function emptyForm(): FormState {
     security: 'auto',
     reverseTag: '',
     totalGB: 0,
+    speedLimitMB: 0,
     expiryDate: null,
     delayedStart: false,
     delayedDays: 0,
@@ -132,6 +134,16 @@ function bytesToGB(bytes: number): number {
 function gbToBytes(gb: number): number {
   if (!gb || gb <= 0) return 0;
   return Math.round(gb * 1024 * 1024 * 1024);
+}
+
+function bytesToMB(bytes: number): number {
+  if (!bytes || bytes <= 0) return 0;
+  return Math.round((bytes / (1024 * 1024)) * 100) / 100;
+}
+
+function mbToBytes(mb: number): number {
+  if (!mb || mb <= 0) return 0;
+  return Math.round(mb * 1024 * 1024);
 }
 
 export default function ClientFormModal({
@@ -179,6 +191,7 @@ export default function ClientFormModal({
         security: client.security || 'auto',
         reverseTag: client.reverse?.tag || '',
         totalGB: bytesToGB(client.totalGB || 0),
+        speedLimitMB: bytesToMB(client.speedLimit || 0),
         reset: Number(client.reset) || 0,
         limitIp: client.limitIp || 0,
         tgId: Number(client.tgId) || 0,
@@ -360,6 +373,7 @@ export default function ClientFormModal({
       security: form.security,
       reverseTag: form.reverseTag,
       totalGB: form.totalGB,
+      speedLimitMB: form.speedLimitMB,
       delayedStart: form.delayedStart,
       delayedDays: form.delayedDays,
       reset: form.reset,
@@ -387,6 +401,7 @@ export default function ClientFormModal({
       flow: showFlow ? (form.flow || '') : '',
       security: showSecurity ? (form.security || 'auto') : 'auto',
       totalGB: gbToBytes(form.totalGB),
+      speedLimit: mbToBytes(form.speedLimitMB),
       expiryTime,
       reset: Number(form.reset) || 0,
       limitIp: Number(form.limitIp) || 0,
@@ -507,6 +522,22 @@ export default function ClientFormModal({
                               </Tooltip>
                             )}
                           </Space.Compact>
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                      <Col xs={24} md={12}>
+                        <Form.Item label={t('pages.clients.speedLimit')} tooltip={t('pages.clients.speedLimitDesc')}>
+                          <InputNumber
+                            value={form.speedLimitMB}
+                            min={0}
+                            step={0.1}
+                            precision={2}
+                            style={{ width: '100%' }}
+                            addonAfter="MB/s"
+                            onChange={(v) => update('speedLimitMB', Number(v) || 0)}
+                          />
                         </Form.Item>
                       </Col>
                     </Row>

@@ -245,6 +245,13 @@ func (j *NodeTrafficSyncJob) syncOne(mgr *runtime.Manager, n *model.Node, doIpSy
 			logger.Warning("node traffic sync: reconcile for", n.Name, "failed:", reconcileErr)
 			return
 		}
+		restartCtx, restartCancel := context.WithTimeout(context.Background(), nodeTrafficSyncRequestTimeout)
+		restartErr := rt.RestartXray(restartCtx)
+		restartCancel()
+		if restartErr != nil {
+			logger.Warning("node traffic sync: restart xray on", n.Name, "failed:", restartErr)
+			return
+		}
 		if clearErr := j.nodeService.ClearNodeDirty(n.Id, n.ConfigDirtyAt); clearErr != nil {
 			logger.Warning("node traffic sync: clear dirty for", n.Name, "failed:", clearErr)
 		}

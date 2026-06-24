@@ -24,6 +24,7 @@ func (p *LinkProvider) build(host string) *SubService {
 
 func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 	svc := p.build(host)
+	svc.displayClientEmail = true
 	links, _, _, _, err := svc.GetSubs(subId, host)
 	if err != nil {
 		return nil, err
@@ -37,6 +38,7 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
 	svc := p.build(host)
+	svc.displayClientEmail = true
 	svc.projectThroughFallbackMaster(inbound)
 	return splitLinkLines(svc.GetLink(inbound, email))
 }

@@ -30,6 +30,9 @@ type SubService struct {
 	address        string
 	remarkTemplate string
 	datepicker     string
+	// displayClientEmail restores the legacy panel QR/link label composition
+	// (inbound-email-extra) without leaking it into browser subscription pages.
+	displayClientEmail bool
 	// subscriptionBody is true only when rendering the actual subscription
 	// content a client app imports (raw /sub fetch, /json, /clash). The remark
 	// template's per-client info is emitted there (on the first link); every
@@ -1641,9 +1644,22 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 	if s.remarkTemplate != "" && s.subscriptionBody {
 		return s.genTemplatedRemark(inbound, s.lookupClient(inbound, email), extra, transport)
 	}
+	if s.displayClientEmail {
+		return joinRemarkParts(inbound.Remark, email, extra)
+	}
 	// Sub info page + panel link/QR displays: just the config name (no template,
 	// so no per-client email/usage leaks into the shown remark).
 	return fallbackRemark(inbound.Remark, extra)
+}
+
+func joinRemarkParts(parts ...string) string {
+	nonEmpty := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			nonEmpty = append(nonEmpty, part)
+		}
+	}
+	return strings.Join(nonEmpty, "-")
 }
 
 // fallbackRemark is the minimal remark used only when no template is configured

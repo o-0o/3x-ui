@@ -530,6 +530,9 @@ func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Cli
 // remark template still applies; displays show just the config name.
 func (s *SubService) genHostRemark(inbound *model.Inbound, client model.Client, hostRemark string, transport string) string {
 	if !s.subscriptionBody {
+		if s.displayClientEmail {
+			return joinRemarkParts(inbound.Remark, client.Email, hostRemark)
+		}
 		return remarkContext{inbound: inbound, hostRemark: hostRemark}.configName()
 	}
 	return s.genTemplatedRemark(inbound, client, hostRemark, transport)

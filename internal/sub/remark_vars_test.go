@@ -215,6 +215,17 @@ func TestGenRemark_NoTemplate_NoSuffix(t *testing.T) {
 	}
 }
 
+func TestGenRemark_PanelLinkIncludesClientEmail(t *testing.T) {
+	s := &SubService{displayClientEmail: true}
+	inbound := &model.Inbound{Remark: "us"}
+	if got := s.genRemark(inbound, "test", "", "tcp"); got != "us-test" {
+		t.Fatalf("panel link remark = %q, want %q", got, "us-test")
+	}
+	if got := s.genRemark(inbound, "test", "cdn", "tcp"); got != "us-test-cdn" {
+		t.Fatalf("panel proxy remark = %q, want %q", got, "us-test-cdn")
+	}
+}
+
 // The per-client info part of the template renders only on a client's first
 // link of the request; later links show the name-only template.
 func TestUsageOnFirstLinkOnly(t *testing.T) {

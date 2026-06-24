@@ -138,6 +138,65 @@ func TestNodeBulk_SmallAddPushesLive(t *testing.T) {
 	}
 }
 
+// Detaching a client from a node inbound must be sent to that node even when
+// the same email remains attached to another inbound. "Shared" only means the
+// global client/stat rows must survive; it does not make the node attachment
+// shared.
+func TestNodeDelete_SharedEmailStillPushesDetach(t *testing.T) {
+	setupBulkDB(t)
+	nodeID, fake := setupNodeRuntime(t)
+	client := model.Client{ID: uuid.NewString(), Email: "shared@x", Enable: true}
+	nodeIB := nodeInbound(t, nodeID, 30004, []model.Client{client})
+
+	localIB := &model.Inbound{
+		UserId: 1, Tag: "local-30005", Enable: true, Port: 30005,
+		Protocol: model.VLESS, Settings: clientsSettings(t, []model.Client{client}),
+	}
+	if err := database.GetDB().Create(localIB).Error; err != nil {
+		t.Fatalf("create local inbound: %v", err)
+	}
+	if err := (&ClientService{}).SyncInbound(nil, localIB.Id, []model.Client{client}); err != nil {
+		t.Fatalf("seed local SyncInbound: %v", err)
+	}
+
+	if _, err := (&ClientService{}).DelInboundClientByEmail(&InboundService{}, nodeIB.Id, client.Email, false); err != nil {
+		t.Fatalf("DelInboundClientByEmail: %v", err)
+	}
+	if got := fake.deleteUser.Load(); got != 1 {
+		t.Fatalf("shared-email node detach calls = %d, want 1", got)
+	}
+}
+
+func TestClientDelete_SharedEmailRemovesNodeAttachment(t *testing.T) {
+	setupBulkDB(t)
+	nodeID, fake := setupNodeRuntime(t)
+	client := model.Client{ID: uuid.NewString(), Email: "delete-shared@x", Enable: true}
+	nodeInbound(t, nodeID, 30006, []model.Client{client})
+
+	localIB := &model.Inbound{
+		UserId: 1, Tag: "local-30007", Enable: true, Port: 30007,
+		Protocol: model.VLESS, Settings: clientsSettings(t, []model.Client{client}),
+	}
+	if err := database.GetDB().Create(localIB).Error; err != nil {
+		t.Fatalf("create local inbound: %v", err)
+	}
+	clientSvc := &ClientService{}
+	if err := clientSvc.SyncInbound(nil, localIB.Id, []model.Client{client}); err != nil {
+		t.Fatalf("seed local SyncInbound: %v", err)
+	}
+	record, err := clientSvc.GetRecordByEmail(nil, client.Email)
+	if err != nil {
+		t.Fatalf("GetRecordByEmail: %v", err)
+	}
+
+	if _, err := clientSvc.Delete(&InboundService{}, record.Id, false); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if got := fake.deleteUser.Load(); got != 1 {
+		t.Fatalf("client-page delete node detach calls = %d, want 1", got)
+	}
+}
+
 // TestNodeBulk_LargeDeleteFoldsToDirty: deleting more than the threshold from an
 // online node inbound must fold into a reconcile rather than per-client deletes.
 func TestNodeBulk_LargeDeleteFoldsToDirty(t *testing.T) {

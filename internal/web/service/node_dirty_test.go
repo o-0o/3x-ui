@@ -107,6 +107,47 @@ func TestDelInboundClientByEmail_DisabledNodeClientMarksDirty(t *testing.T) {
 	}
 }
 
+func TestDelInboundClientByEmail_SharedOfflineNodeMarksDirty(t *testing.T) {
+	setupConflictDB(t)
+	db := database.GetDB()
+
+	node := &model.Node{Name: "n1", Address: "127.0.0.1", Port: 2096, ApiToken: "tok", Enable: true, Status: "offline"}
+	if err := db.Create(node).Error; err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	client := model.Client{Email: "shared@x", Enable: true}
+	nodeInbound := &model.Inbound{
+		UserId: 1, NodeID: &node.Id, Tag: "node-443", Enable: true, Port: 443,
+		Protocol: model.VLESS, Settings: `{"clients":[{"email":"shared@x","enable":true}]}`,
+	}
+	localInbound := &model.Inbound{
+		UserId: 1, Tag: "local-8443", Enable: true, Port: 8443,
+		Protocol: model.VLESS, Settings: `{"clients":[{"email":"shared@x","enable":true}]}`,
+	}
+	if err := db.Create(nodeInbound).Error; err != nil {
+		t.Fatalf("create node inbound: %v", err)
+	}
+	if err := db.Create(localInbound).Error; err != nil {
+		t.Fatalf("create local inbound: %v", err)
+	}
+	clientSvc := &ClientService{}
+	if err := clientSvc.SyncInbound(nil, nodeInbound.Id, []model.Client{client}); err != nil {
+		t.Fatalf("sync node inbound: %v", err)
+	}
+	if err := clientSvc.SyncInbound(nil, localInbound.Id, []model.Client{client}); err != nil {
+		t.Fatalf("sync local inbound: %v", err)
+	}
+
+	if _, err := clientSvc.DelInboundClientByEmail(&InboundService{}, nodeInbound.Id, client.Email, false); err != nil {
+		t.Fatalf("DelInboundClientByEmail: %v", err)
+	}
+	if _, _, dirty, _, err := (&NodeService{}).NodeSyncState(node.Id); err != nil {
+		t.Fatalf("NodeSyncState: %v", err)
+	} else if !dirty {
+		t.Fatal("shared-email delete on an offline node must mark it dirty")
+	}
+}
+
 // ClearNodeDirty must be a compare-and-swap on config_dirty_at so a concurrent
 // edit that re-dirties the node during a reconcile is not silently cleared.
 func TestNodeDirty_ClearIsCASOnDirtyAt(t *testing.T) {

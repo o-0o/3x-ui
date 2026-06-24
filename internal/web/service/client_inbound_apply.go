@@ -807,7 +807,10 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 
 	var rt runtime.Runtime
 	var push bool
-	if len(email) > 0 && !emailShared && (oldInbound.NodeID != nil || needApiDel) {
+	// Sharing an email with another inbound only controls whether global traffic
+	// rows may be removed. The user still has to be detached from this specific
+	// inbound, locally or remotely.
+	if len(email) > 0 && (oldInbound.NodeID != nil || needApiDel) {
 		r, p, dirty, perr := inboundSvc.nodePushPlan(oldInbound)
 		if perr != nil {
 			return false, perr
@@ -847,7 +850,7 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 
 	// Apply the runtime delete after commit — outside the serialized writer so a
 	// slow node call can't stall traffic accounting.
-	if len(email) > 0 && !emailShared {
+	if len(email) > 0 {
 		if oldInbound.NodeID == nil {
 			// Local inbound: a disabled client isn't in the running Xray, so only
 			// a live one (needApiDel) needs an API removal.

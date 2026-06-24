@@ -1337,7 +1337,7 @@ install_x-ui() {
     cd ${xui_folder%/x-ui}/
 
     # Download resources
-    if [ $# == 0 ]; then
+    if [[ -z "${1:-}" ]]; then
         tag_version=$(curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/${repo_owner}/${repo_name}/releases?per_page=100" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | grep -E 'tokenbucket' | head -n1)
         if [[ ! -n "$tag_version" ]]; then
             echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"

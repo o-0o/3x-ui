@@ -11,13 +11,13 @@
 当前推荐版本：
 
 ```bash
-v3.3.1-tokenbucket.12
+v3.4.0-tokenbucket.1
 ```
 
 Release 地址：
 
 ```text
-https://github.com/o-0o/3x-ui/releases/tag/v3.3.1-tokenbucket.12
+https://github.com/o-0o/3x-ui/releases/tag/v3.4.0-tokenbucket.1
 ```
 
 ## 已安装机器：保留配置更新
@@ -33,7 +33,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-t
 更新到指定版本：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.3.1-tokenbucket.12
+bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.4.0-tokenbucket.1
 ```
 
 也可以在面板机器上直接用菜单：
@@ -57,7 +57,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-t
 安装指定版本：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/v3.3.1-tokenbucket.12/install.sh) v3.3.1-tokenbucket.12
+bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/v3.4.0-tokenbucket.1/install.sh) v3.4.0-tokenbucket.1
 ```
 
 ## 更新后检查
@@ -183,7 +183,7 @@ frontend/src/pages/clients/ClientBulkAddModal.tsx
 frontend/src/schemas/client.ts
 .github/workflows/release.yml
 internal/web/runtime/remote.go
-tools/xray-tokenbucket/patches/xray-core-v26.6.1-tokenbucket-speedlimit.patch
+tools/xray-tokenbucket/patches/xray-core-v26.6.22-tokenbucket-speedlimit.patch
 ```
 
 ### 4. 合并后验证
@@ -251,13 +251,13 @@ git log -1 --oneline
 查看已有 tag：
 
 ```bash
-git tag --list 'v3.3.1-tokenbucket.*' --sort=v:refname | tail -10
+git tag --list 'v*-tokenbucket.*' --sort=v:refname | tail -10
 ```
 
-例如当前版本是 `.12`，下一版可以使用 `.13`：
+例如当前版本是 `v3.4.0-tokenbucket.1`，下一版可以使用 `.2`：
 
 ```bash
-TAG=v3.3.1-tokenbucket.13
+TAG=v3.4.0-tokenbucket.2
 git tag -a "$TAG" -m "$TAG"
 git push origin "$TAG"
 ```
@@ -313,7 +313,7 @@ git add <本次修复文件>
 git commit -m "Fix amd64 release build"
 git push origin feature/xray-core-tokenbucket-speed-limit
 
-TAG=v3.3.1-tokenbucket.14
+TAG=v3.4.0-tokenbucket.3
 git tag -a "$TAG" -m "$TAG"
 git push origin "$TAG"
 ```
@@ -338,7 +338,7 @@ frontend/src/pages/clients/ClientBulkAddModal.tsx
 Xray-core patch：
 
 ```text
-tools/xray-tokenbucket/patches/xray-core-v26.6.1-tokenbucket-speedlimit.patch
+tools/xray-tokenbucket/patches/xray-core-v26.6.22-tokenbucket-speedlimit.patch
 ```
 
 构建 patched Xray：
@@ -360,7 +360,7 @@ docs/tokenbucket-maintenance.md
 正确更新是：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.3.1-tokenbucket.12
+bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.4.0-tokenbucket.1
 ```
 
 这样不会重置端口、账号、密码、WebBasePath 或入站配置。

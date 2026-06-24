@@ -98,8 +98,8 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Xray outbound tag for the panel's own outbound HTTP (update checks/downloads, Telegram, geo updates, outbound-subscription fetches)",
         "type": "string"
       },
-      "remarkModel": {
-        "description": "Remark model pattern for inbounds",
+      "remarkTemplate": {
+        "description": "Subscription remark template ({{VAR}} tokens) rendered per client",
         "type": "string"
       },
       "restartXrayOnClientDisable": {
@@ -111,6 +111,52 @@ export const SCHEMAS: Record<string, unknown> = {
         "maximum": 525600,
         "minimum": 1,
         "type": "integer"
+      },
+      "smtpCpu": {
+        "description": "CPU threshold for email notifications",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "smtpEnable": {
+        "description": "Email (SMTP) notification settings\nEnable email notifications",
+        "type": "boolean"
+      },
+      "smtpEnabledEvents": {
+        "description": "Comma-separated event types to send via email",
+        "type": "string"
+      },
+      "smtpEncryptionType": {
+        "description": "SMTP encryption: none, starttls, tls",
+        "type": "string"
+      },
+      "smtpHost": {
+        "description": "SMTP server host",
+        "type": "string"
+      },
+      "smtpMemory": {
+        "description": "Memory threshold for email notifications",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "smtpPassword": {
+        "description": "SMTP password",
+        "type": "string"
+      },
+      "smtpPort": {
+        "description": "SMTP server port",
+        "maximum": 65535,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "smtpTo": {
+        "description": "Comma-separated recipient emails",
+        "type": "string"
+      },
+      "smtpUsername": {
+        "description": "SMTP username",
+        "type": "string"
       },
       "subAnnounce": {
         "description": "Subscription announce",
@@ -144,10 +190,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Domain for subscription server validation",
         "type": "string"
       },
-      "subEmailInRemark": {
-        "description": "Include email in subscription remark/name",
-        "type": "boolean"
-      },
       "subEnable": {
         "description": "Subscription server settings\nEnable subscription server",
         "type": "boolean"
@@ -158,6 +200,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "subEncrypt": {
         "description": "Encrypt subscription responses",
+        "type": "boolean"
+      },
+      "subHideSettings": {
+        "description": "Hide server settings in happ subscription (Only for Happ)",
         "type": "boolean"
       },
       "subJsonEnable": {
@@ -209,10 +255,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Subscription global routing rules (Only for Happ)",
         "type": "string"
       },
-      "subShowInfo": {
-        "description": "Show client information in subscriptions",
-        "type": "boolean"
-      },
       "subSupportUrl": {
         "description": "Subscription support URL",
         "type": "string"
@@ -251,10 +293,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Telegram bot settings\nEnable Telegram bot notifications",
         "type": "boolean"
       },
-      "tgBotLoginNotify": {
-        "description": "Send login notifications",
-        "type": "boolean"
-      },
       "tgBotProxy": {
         "description": "Proxy URL for Telegram bot",
         "type": "string"
@@ -269,9 +307,19 @@ export const SCHEMAS: Record<string, unknown> = {
         "minimum": 0,
         "type": "integer"
       },
+      "tgEnabledEvents": {
+        "description": "Comma-separated event types to send via Telegram",
+        "type": "string"
+      },
       "tgLang": {
         "description": "Telegram bot language",
         "type": "string"
+      },
+      "tgMemory": {
+        "description": "Memory usage threshold for alerts (percent)",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
       },
       "tgRunTime": {
         "description": "Cron schedule for Telegram notifications",
@@ -358,9 +406,19 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelOutbound",
-      "remarkModel",
+      "remarkTemplate",
       "restartXrayOnClientDisable",
       "sessionMaxAge",
+      "smtpCpu",
+      "smtpEnable",
+      "smtpEnabledEvents",
+      "smtpEncryptionType",
+      "smtpHost",
+      "smtpMemory",
+      "smtpPassword",
+      "smtpPort",
+      "smtpTo",
+      "smtpUsername",
       "subAnnounce",
       "subCertFile",
       "subClashEnable",
@@ -369,10 +427,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashRules",
       "subClashURI",
       "subDomain",
-      "subEmailInRemark",
       "subEnable",
       "subEnableRouting",
       "subEncrypt",
+      "subHideSettings",
       "subJsonEnable",
       "subJsonFinalMask",
       "subJsonMux",
@@ -385,7 +443,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileUrl",
       "subRoutingRules",
-      "subShowInfo",
       "subSupportUrl",
       "subThemeDir",
       "subTitle",
@@ -395,11 +452,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "tgBotBackup",
       "tgBotChatId",
       "tgBotEnable",
-      "tgBotLoginNotify",
       "tgBotProxy",
       "tgBotToken",
       "tgCpu",
+      "tgEnabledEvents",
       "tgLang",
+      "tgMemory",
       "tgRunTime",
       "timeLocation",
       "trafficDiff",
@@ -443,6 +501,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "hasNordSecret": {
+        "type": "boolean"
+      },
+      "hasSmtpPassword": {
         "type": "boolean"
       },
       "hasTgBotToken": {
@@ -532,8 +593,8 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Xray outbound tag for the panel's own outbound HTTP (update checks/downloads, Telegram, geo updates, outbound-subscription fetches)",
         "type": "string"
       },
-      "remarkModel": {
-        "description": "Remark model pattern for inbounds",
+      "remarkTemplate": {
+        "description": "Subscription remark template ({{VAR}} tokens) rendered per client",
         "type": "string"
       },
       "restartXrayOnClientDisable": {
@@ -545,6 +606,52 @@ export const SCHEMAS: Record<string, unknown> = {
         "maximum": 525600,
         "minimum": 1,
         "type": "integer"
+      },
+      "smtpCpu": {
+        "description": "CPU threshold for email notifications",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "smtpEnable": {
+        "description": "Email (SMTP) notification settings\nEnable email notifications",
+        "type": "boolean"
+      },
+      "smtpEnabledEvents": {
+        "description": "Comma-separated event types to send via email",
+        "type": "string"
+      },
+      "smtpEncryptionType": {
+        "description": "SMTP encryption: none, starttls, tls",
+        "type": "string"
+      },
+      "smtpHost": {
+        "description": "SMTP server host",
+        "type": "string"
+      },
+      "smtpMemory": {
+        "description": "Memory threshold for email notifications",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "smtpPassword": {
+        "description": "SMTP password",
+        "type": "string"
+      },
+      "smtpPort": {
+        "description": "SMTP server port",
+        "maximum": 65535,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "smtpTo": {
+        "description": "Comma-separated recipient emails",
+        "type": "string"
+      },
+      "smtpUsername": {
+        "description": "SMTP username",
+        "type": "string"
       },
       "subAnnounce": {
         "description": "Subscription announce",
@@ -578,10 +685,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Domain for subscription server validation",
         "type": "string"
       },
-      "subEmailInRemark": {
-        "description": "Include email in subscription remark/name",
-        "type": "boolean"
-      },
       "subEnable": {
         "description": "Subscription server settings\nEnable subscription server",
         "type": "boolean"
@@ -592,6 +695,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "subEncrypt": {
         "description": "Encrypt subscription responses",
+        "type": "boolean"
+      },
+      "subHideSettings": {
+        "description": "Hide server settings in happ subscription (Only for Happ)",
         "type": "boolean"
       },
       "subJsonEnable": {
@@ -643,10 +750,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Subscription global routing rules (Only for Happ)",
         "type": "string"
       },
-      "subShowInfo": {
-        "description": "Show client information in subscriptions",
-        "type": "boolean"
-      },
       "subSupportUrl": {
         "description": "Subscription support URL",
         "type": "string"
@@ -685,10 +788,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Telegram bot settings\nEnable Telegram bot notifications",
         "type": "boolean"
       },
-      "tgBotLoginNotify": {
-        "description": "Send login notifications",
-        "type": "boolean"
-      },
       "tgBotProxy": {
         "description": "Proxy URL for Telegram bot",
         "type": "string"
@@ -703,9 +802,19 @@ export const SCHEMAS: Record<string, unknown> = {
         "minimum": 0,
         "type": "integer"
       },
+      "tgEnabledEvents": {
+        "description": "Comma-separated event types to send via Telegram",
+        "type": "string"
+      },
       "tgLang": {
         "description": "Telegram bot language",
         "type": "string"
+      },
+      "tgMemory": {
+        "description": "Memory usage threshold for alerts (percent)",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
       },
       "tgRunTime": {
         "description": "Cron schedule for Telegram notifications",
@@ -773,6 +882,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "hasApiToken",
       "hasLdapPassword",
       "hasNordSecret",
+      "hasSmtpPassword",
       "hasTgBotToken",
       "hasTwoFactorToken",
       "hasWarpSecret",
@@ -798,9 +908,19 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelOutbound",
-      "remarkModel",
+      "remarkTemplate",
       "restartXrayOnClientDisable",
       "sessionMaxAge",
+      "smtpCpu",
+      "smtpEnable",
+      "smtpEnabledEvents",
+      "smtpEncryptionType",
+      "smtpHost",
+      "smtpMemory",
+      "smtpPassword",
+      "smtpPort",
+      "smtpTo",
+      "smtpUsername",
       "subAnnounce",
       "subCertFile",
       "subClashEnable",
@@ -809,10 +929,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashRules",
       "subClashURI",
       "subDomain",
-      "subEmailInRemark",
       "subEnable",
       "subEnableRouting",
       "subEncrypt",
+      "subHideSettings",
       "subJsonEnable",
       "subJsonFinalMask",
       "subJsonMux",
@@ -825,7 +945,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileUrl",
       "subRoutingRules",
-      "subShowInfo",
       "subSupportUrl",
       "subThemeDir",
       "subTitle",
@@ -835,11 +954,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "tgBotBackup",
       "tgBotChatId",
       "tgBotEnable",
-      "tgBotLoginNotify",
       "tgBotProxy",
       "tgBotToken",
       "tgCpu",
+      "tgEnabledEvents",
       "tgLang",
+      "tgMemory",
       "tgRunTime",
       "timeLocation",
       "trafficDiff",
@@ -1224,6 +1344,181 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "Host": {
+    "description": "Host is an override endpoint attached to an inbound: at subscription time each\nenabled host renders one share link/proxy with its own address/port/TLS/etc.,\nsuperseding the legacy externalProxy array. Free-JSON fields are stored as\ntext and parsed in the sub layer; slice fields use the json serializer.",
+    "properties": {
+      "address": {
+        "example": "cdn.example.com",
+        "type": "string"
+      },
+      "allowInsecure": {
+        "type": "boolean"
+      },
+      "alpn": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "createdAt": {
+        "type": "integer"
+      },
+      "echConfigList": {
+        "type": "string"
+      },
+      "excludeFromSubTypes": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "finalMask": {
+        "description": "FinalMask is a JSON object of xray finalmask masks (tcp/udp/quicParams),\nmerged into this host's JSON-subscription stream. Empty = no override.",
+        "type": "string"
+      },
+      "fingerprint": {
+        "type": "string"
+      },
+      "hostHeader": {
+        "type": "string"
+      },
+      "id": {
+        "example": 1,
+        "type": "integer"
+      },
+      "inboundId": {
+        "example": 1,
+        "type": "integer"
+      },
+      "isDisabled": {
+        "type": "boolean"
+      },
+      "isHidden": {
+        "type": "boolean"
+      },
+      "keepSniBlank": {
+        "type": "boolean"
+      },
+      "mihomoIpVersion": {
+        "enum": [
+          "dual",
+          "ipv4",
+          "ipv6",
+          "ipv4-prefer",
+          "ipv6-prefer"
+        ],
+        "type": "string"
+      },
+      "mihomoX25519": {
+        "type": "boolean"
+      },
+      "muxParams": {},
+      "nodeGuids": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "overrideSniFromAddress": {
+        "type": "boolean"
+      },
+      "path": {
+        "type": "string"
+      },
+      "pinnedPeerCertSha256": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "port": {
+        "example": 8443,
+        "maximum": 65535,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "remark": {
+        "example": "cdn-front",
+        "maxLength": 256,
+        "type": "string"
+      },
+      "security": {
+        "enum": [
+          "same",
+          "tls",
+          "none",
+          "reality"
+        ],
+        "example": "same",
+        "type": "string"
+      },
+      "serverDescription": {
+        "maxLength": 64,
+        "type": "string"
+      },
+      "shuffleHost": {
+        "type": "boolean"
+      },
+      "sni": {
+        "type": "string"
+      },
+      "sockoptParams": {},
+      "sortOrder": {
+        "type": "integer"
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "updatedAt": {
+        "type": "integer"
+      },
+      "verifyPeerCertByName": {
+        "type": "string"
+      },
+      "vlessRoute": {
+        "description": "VlessRoute is a free-form port/range routing spec (e.g. \"53,443,1000-2000\");\nstored verbatim, format-validated on the frontend.",
+        "type": "string"
+      }
+    },
+    "required": [
+      "address",
+      "allowInsecure",
+      "alpn",
+      "createdAt",
+      "echConfigList",
+      "excludeFromSubTypes",
+      "finalMask",
+      "fingerprint",
+      "hostHeader",
+      "id",
+      "inboundId",
+      "isDisabled",
+      "isHidden",
+      "keepSniBlank",
+      "mihomoIpVersion",
+      "mihomoX25519",
+      "muxParams",
+      "overrideSniFromAddress",
+      "path",
+      "pinnedPeerCertSha256",
+      "port",
+      "remark",
+      "security",
+      "serverDescription",
+      "shuffleHost",
+      "sni",
+      "sockoptParams",
+      "sortOrder",
+      "tags",
+      "updatedAt",
+      "verifyPeerCertByName",
+      "vlessRoute"
+    ],
+    "type": "object"
+  },
   "Inbound": {
     "description": "Inbound represents an Xray inbound configuration with traffic statistics and settings.",
     "properties": {
@@ -1505,6 +1800,10 @@ export const SCHEMAS: Record<string, unknown> = {
   "Node": {
     "description": "Node represents a remote 3x-ui panel registered with the central panel.\nThe central panel polls each node's existing /panel/api/server/status\nendpoint over HTTP using the per-node ApiToken to populate the runtime\nstatus fields below.",
     "properties": {
+      "activeCount": {
+        "example": 23,
+        "type": "integer"
+      },
       "address": {
         "example": "node1.example.com",
         "type": "string"
@@ -1540,6 +1839,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "depletedCount": {
         "example": 1,
+        "type": "integer"
+      },
+      "disabledCount": {
+        "example": 3,
         "type": "integer"
       },
       "enable": {
@@ -1591,9 +1894,20 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "de-fra-1",
         "type": "string"
       },
+      "netDown": {
+        "example": 2097152,
+        "type": "integer"
+      },
+      "netUp": {
+        "example": 1048576,
+        "type": "integer"
+      },
       "onlineCount": {
         "example": 3,
         "type": "integer"
+      },
+      "outboundTag": {
+        "type": "string"
       },
       "panelVersion": {
         "example": "v3.x.x",
@@ -1632,7 +1946,8 @@ export const SCHEMAS: Record<string, unknown> = {
         "enum": [
           "verify",
           "skip",
-          "pin"
+          "pin",
+          "mtls"
         ],
         "type": "string"
       },
@@ -1660,6 +1975,7 @@ export const SCHEMAS: Record<string, unknown> = {
       }
     },
     "required": [
+      "activeCount",
       "address",
       "allowPrivateAddress",
       "apiToken",
@@ -1670,6 +1986,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "cpuPct",
       "createdAt",
       "depletedCount",
+      "disabledCount",
       "enable",
       "guid",
       "id",
@@ -1681,7 +1998,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "latencyMs",
       "memPct",
       "name",
+      "netDown",
+      "netUp",
       "onlineCount",
+      "outboundTag",
       "panelVersion",
       "pinnedCertSha256",
       "port",

@@ -32,11 +32,10 @@ func TestSubscriptionExpiryFromClient(t *testing.T) {
 func TestGenRemarkOmitsNodeName(t *testing.T) {
 	nodeID := 7
 	s := &SubService{
-		remarkModel: "-ieo",
-		nodesByID:   map[int]*model.Node{7: {Id: 7, Name: "Berlin", Address: "node7.example.com"}},
+		nodesByID: map[int]*model.Node{7: {Id: 7, Name: "Berlin", Address: "node7.example.com"}},
 	}
 	ib := &model.Inbound{Remark: "vless-tcp", NodeID: &nodeID}
-	if got := s.genRemark(ib, "", ""); got != "vless-tcp" {
+	if got := s.genRemark(ib, "", "", ""); got != "vless-tcp" {
 		t.Fatalf("remark = %q, want %q (node name must not leak into client-visible remarks)", got, "vless-tcp")
 	}
 }
@@ -370,8 +369,10 @@ func TestBuildXhttpExtra_IncludesClientSideFieldsWhenPresent(t *testing.T) {
 			t.Fatalf("extra missing %q: %#v", key, extra)
 		}
 	}
-	if _, ok := extra["mode"]; ok {
-		t.Fatalf("mode should stay as a top-level query parameter, got extra %#v", extra)
+	// mode rides inside extra (in addition to the flat param) so clients
+	// that only read the extra JSON keep the xhttp mode (#5446).
+	if extra["mode"] != "packet-up" {
+		t.Fatalf("extra[mode] = %#v, want packet-up", extra["mode"])
 	}
 
 	headers, ok := extra["headers"].(map[string]any)
@@ -423,6 +424,25 @@ func TestCloneStringMap_Empty(t *testing.T) {
 	}
 	if len(dst) != 0 {
 		t.Fatalf("clone of empty map should be empty, got %v", dst)
+	}
+}
+
+func TestJoinHostPort(t *testing.T) {
+	cases := []struct {
+		host string
+		port int
+		want string
+	}{
+		{"example.com", 443, "example.com:443"},
+		{"1.2.3.4", 443, "1.2.3.4:443"},
+		{"2001:db8::1", 443, "[2001:db8::1]:443"},
+		{"[2001:db8::1]", 443, "[2001:db8::1]:443"},
+		{"2001:db8::1", 8080, "[2001:db8::1]:8080"},
+	}
+	for _, c := range cases {
+		if got := joinHostPort(c.host, c.port); got != c.want {
+			t.Fatalf("joinHostPort(%q, %d) = %q, want %q", c.host, c.port, got, c.want)
+		}
 	}
 }
 

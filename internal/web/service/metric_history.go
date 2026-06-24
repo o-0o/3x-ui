@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,11 +19,10 @@ type MetricSample struct {
 	V float64 `json:"v"`
 }
 
-// metricCapacityDefault caps each ring buffer at ~5h worth of @2s samples
-// or ~25h worth of @10s samples. Plenty for the bucketed aggregation
-// view and small enough that the working set per metric stays under
-// ~150 KiB.
-const metricCapacityDefault = 9000
+// metricCapacityDefault caps each ring buffer at 48h worth of @2s samples.
+// Node metrics arrive less frequently, so they fit the same retention window
+// with room to spare.
+const metricCapacityDefault = 86400
 
 // metricHistory is a thread-safe, in-memory ring buffer keyed by
 // arbitrary strings. Two singletons live below: one for system-wide
@@ -106,8 +106,8 @@ func (h *metricHistory) aggregate(metric string, bucketSeconds int, maxPoints in
 	h.mu.Lock()
 	hist := h.metrics[metric]
 	startIdx := 0
-	for i := len(hist) - 1; i >= 0; i-- {
-		if hist[i].T < cutoff {
+	for i, h := range slices.Backward(hist) {
+		if h.T < cutoff {
 			startIdx = i + 1
 			break
 		}
@@ -175,7 +175,7 @@ var SystemMetricKeys = []string{
 }
 
 // NodeMetricKeys lists the per-node metric names NodeHeartbeatJob writes.
-var NodeMetricKeys = []string{"cpu", "mem"}
+var NodeMetricKeys = []string{"cpu", "mem", "netUp", "netDown"}
 
 // XrayMetricKeys lists series sourced from xray's /debug/vars expvar
 // endpoint. Populated by XrayMetricsService.Sample on the same 2s cadence

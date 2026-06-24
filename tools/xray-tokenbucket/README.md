@@ -12,8 +12,8 @@ The value is stored and emitted as bytes per second. The UI shows it as MB/s.
 tools/xray-tokenbucket/build-xray.sh
 ```
 
-The script clones Xray-core `v26.6.1`, applies
-`patches/xray-core-v26.6.1-tokenbucket-speedlimit.patch`, builds linux amd64,
+The script clones Xray-core `v26.6.22`, applies
+`patches/xray-core-v26.6.22-tokenbucket-speedlimit.patch`, builds linux amd64,
 and writes:
 
 ```text

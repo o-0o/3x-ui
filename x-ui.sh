@@ -2170,7 +2170,15 @@ iplimit_main() {
     esac
 }
 
-install_iplimit() {
+setup_fail2ban_iplimit() {
+    # Honor the same toggle the panel uses (isFail2BanEnabled): enabled when the
+    # var is unset or exactly "true"; any other explicit value means the operator
+    # opted out, so do nothing rather than install a fail2ban the panel ignores.
+    if [[ -n "${XUI_ENABLE_FAIL2BAN+x}" && "${XUI_ENABLE_FAIL2BAN}" != "true" ]]; then
+        echo -e "${yellow}XUI_ENABLE_FAIL2BAN=${XUI_ENABLE_FAIL2BAN}, skipping Fail2ban setup.${plain}\n"
+        return 0
+    fi
+
     if ! command -v fail2ban-client &> /dev/null; then
         echo -e "${green}Fail2ban is not installed. Installing now...!${plain}\n"
 
@@ -2220,13 +2228,13 @@ install_iplimit() {
                 ;;
             *)
                 echo -e "${red}Unsupported operating system. Please check the script and install the necessary packages manually.${plain}\n"
-                exit 1
+                return 1
                 ;;
         esac
 
         if ! command -v fail2ban-client &> /dev/null; then
             echo -e "${red}Fail2ban installation failed.${plain}\n"
-            exit 1
+            return 1
         fi
 
         echo -e "${green}Fail2ban installed successfully!${plain}\n"
@@ -2271,6 +2279,14 @@ install_iplimit() {
     fi
 
     echo -e "${green}IP Limit installed and configured successfully!${plain}\n"
+    return 0
+}
+
+# install_iplimit is the interactive (menu) entry point: it runs the shared
+# setup and then returns to the menu. The non-interactive installer path uses
+# setup_fail2ban_iplimit directly via `x-ui setup-fail2ban`.
+install_iplimit() {
+    setup_fail2ban_iplimit
     before_show_menu
 }
 
@@ -2413,8 +2429,8 @@ EOF
 
     # Ports to exempt from the ban so an over-limit proxy client can never lock
     # the administrator out of SSH or the panel. The ban still covers every other
-    # TCP port (including all Xray inbounds), so IP-limit keeps working for inbounds
-    # added later without regenerating these files.
+    # TCP and UDP port (including all Xray inbounds, e.g. UDP-based Hysteria2), so
+    # IP-limit keeps working for inbounds added later without regenerating these files.
     local ssh_ports
     ssh_ports=$(grep -oP '^[[:space:]]*Port[[:space:]]+\K[0-9]+' /etc/ssh/sshd_config 2>/dev/null | paste -sd, -)
     [[ -z "${ssh_ports}" ]] && ssh_ports="22"
@@ -2430,23 +2446,24 @@ before = iptables-allports.conf
 [Definition]
 actionstart = <iptables> -N f2b-<name>
               <iptables> -A f2b-<name> -j <returntype>
-              <iptables> -I <chain> -p <protocol> -j f2b-<name>
+              <iptables> -I <chain> -j f2b-<name>
 
-actionstop = <iptables> -D <chain> -p <protocol> -j f2b-<name>
+actionstop = <iptables> -D <chain> -j f2b-<name>
              <actionflush>
              <iptables> -X f2b-<name>
 
 actioncheck = <iptables> -n -L <chain> | grep -q 'f2b-<name>[ \t]'
 
-actionban = <iptables> -I f2b-<name> 1 -s <ip> -p <protocol> -m multiport ! --dports <exemptports> -j <blocktype>
+actionban = <iptables> -I f2b-<name> 1 -s <ip> -p tcp -m multiport ! --dports <exemptports> -j <blocktype>
+            <iptables> -I f2b-<name> 1 -s <ip> -p udp -m multiport ! --dports <exemptports> -j <blocktype>
             echo "\$(date +"%%Y/%%m/%%d %%H:%%M:%%S")   BAN   [Email] = <F-USER> [IP] = <ip> banned for <bantime> seconds." >> ${iplimit_banned_log_path}
 
-actionunban = <iptables> -D f2b-<name> -s <ip> -p <protocol> -m multiport ! --dports <exemptports> -j <blocktype>
+actionunban = <iptables> -D f2b-<name> -s <ip> -p tcp -m multiport ! --dports <exemptports> -j <blocktype>
+              <iptables> -D f2b-<name> -s <ip> -p udp -m multiport ! --dports <exemptports> -j <blocktype>
               echo "\$(date +"%%Y/%%m/%%d %%H:%%M:%%S")   UNBAN   [Email] = <F-USER> [IP] = <ip> unbanned." >> ${iplimit_banned_log_path}
 
 [Init]
 name = default
-protocol = tcp
 chain = INPUT
 exemptports = ${exempt_ports}
 EOF
@@ -3265,6 +3282,9 @@ if [[ $# > 0 ]]; then
             ;;
         "banlog")
             check_install 0 && show_banlog 0
+            ;;
+        "setup-fail2ban")
+            setup_fail2ban_iplimit
             ;;
         "update")
             check_install 0 && update 0

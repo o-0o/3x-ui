@@ -8,12 +8,42 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/netproxy"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 )
+
+// MasterClientCertProvider supplies the master client certificate this panel
+// presents to nodes in mtls mode. It is injected by the web layer so the
+// runtime package need not import service.
+type MasterClientCertProvider func() (tls.Certificate, error)
+
+var (
+	masterClientCertMu sync.RWMutex
+	masterClientCert   MasterClientCertProvider
+)
+
+// SetMasterClientCertProvider installs the provider used to obtain the master
+// client certificate for mtls nodes. Passing nil disables it.
+func SetMasterClientCertProvider(p MasterClientCertProvider) {
+	masterClientCertMu.Lock()
+	defer masterClientCertMu.Unlock()
+	masterClientCert = p
+}
+
+func getMasterClientCert() (tls.Certificate, error) {
+	masterClientCertMu.RLock()
+	p := masterClientCert
+	masterClientCertMu.RUnlock()
+	if p == nil {
+		return tls.Certificate{}, common.NewError("mtls: master client certificate provider not configured")
+	}
+	return p()
+}
 
 // defaultNodeHTTPClient reaches nodes trusting the system CA store ("verify"
 // mode or plain http); shared so connections pool across nodes.
@@ -26,19 +56,64 @@ var defaultNodeHTTPClient = &http.Client{
 	},
 }
 
-// HTTPClientForNode returns the node's HTTP client honoring its TLS verify mode
-// (verify→system CA, skip→no check, pin→leaf SHA-256). Used by both the probe
-// and every Remote op so they can't disagree on a self-signed node (#5264).
-func HTTPClientForNode(n *model.Node) (*http.Client, error) {
+func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
 	mode := n.TlsVerifyMode
 	if mode == "" {
 		mode = "verify"
 	}
+	if proxyURL != "" {
+		client, err := netproxy.NewHTTPClient(proxyURL, remoteHTTPTimeout)
+		if err != nil {
+			return nil, err
+		}
+		if mode == "verify" || n.Scheme == "http" {
+			return client, nil
+		}
+		transport, ok := client.Transport.(*http.Transport)
+		if !ok {
+			return client, nil
+		}
+		tlsCfg, err := tlsConfigForNode(n)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsCfg
+		return client, nil
+	}
 	if mode == "verify" || n.Scheme == "http" {
 		return defaultNodeHTTPClient, nil
 	}
+	tlsCfg, err := tlsConfigForNode(n)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        64,
+			MaxIdleConnsPerHost: 4,
+			IdleConnTimeout:     60 * time.Second,
+			DialContext:         netsafe.SSRFGuardedDialContext,
+			TLSClientConfig:     tlsCfg,
+		},
+	}, nil
+}
+
+func tlsConfigForNode(n *model.Node) (*tls.Config, error) {
+	if n.TlsVerifyMode == "mtls" {
+		// Present the master client cert; verify the node's server cert against
+		// the system roots (no InsecureSkipVerify). mtls authenticates the
+		// caller — it does not change how the node's server identity is checked.
+		cert, err := getMasterClientCert()
+		if err != nil {
+			return nil, err
+		}
+		return &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}, nil
+	}
 	tlsCfg := &tls.Config{InsecureSkipVerify: true} // lgtm[go/disabled-certificate-check]
-	if mode == "pin" {
+	if n.TlsVerifyMode == "pin" {
 		want, err := DecodeCertPin(n.PinnedCertSha256)
 		if err != nil {
 			return nil, err
@@ -54,15 +129,7 @@ func HTTPClientForNode(n *model.Node) (*http.Client, error) {
 			return nil
 		}
 	}
-	return &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        64,
-			MaxIdleConnsPerHost: 4,
-			IdleConnTimeout:     60 * time.Second,
-			DialContext:         netsafe.SSRFGuardedDialContext,
-			TLSClientConfig:     tlsCfg,
-		},
-	}, nil
+	return tlsCfg, nil
 }
 
 // DecodeCertPin decodes a SHA-256 cert pin given as base64 (Xray's

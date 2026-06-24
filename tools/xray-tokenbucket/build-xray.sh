@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-XRAY_TAG="${XRAY_TAG:-v26.6.1}"
+XRAY_TAG="${XRAY_TAG:-v26.6.22}"
 REPO_URL="${XRAY_REPO_URL:-https://github.com/XTLS/Xray-core.git}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${WORK_DIR:-/tmp/xray-core-tokenbucket}"
 OUT_DIR="${OUT_DIR:-$ROOT_DIR/dist}"
-PATCH_FILE="$ROOT_DIR/patches/xray-core-v26.6.1-tokenbucket-speedlimit.patch"
+PATCH_FILE="$ROOT_DIR/patches/xray-core-v26.6.22-tokenbucket-speedlimit.patch"
 XRAY_BINARY="$OUT_DIR/xray"
 
 rm -rf "$WORK_DIR"

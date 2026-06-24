@@ -23,28 +23,39 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/reflect_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+
+	"gorm.io/gorm"
 )
 
 //go:embed config.json
 var xrayTemplateConfig string
 
 var defaultValueMap = map[string]string{
-	"xrayTemplateConfig":          xrayTemplateConfig,
-	"webListen":                   "",
-	"webDomain":                   "",
-	"webPort":                     "2053",
-	"webCertFile":                 "",
-	"webKeyFile":                  "",
-	"secret":                      random.Seq(32),
-	"panelGuid":                   uuid.NewString(),
-	"apiToken":                    "",
+	"xrayTemplateConfig": xrayTemplateConfig,
+	"webListen":          "",
+	"webDomain":          "",
+	"webPort":            "2053",
+	"webCertFile":        "",
+	"webKeyFile":         "",
+	"secret":             random.Seq(32),
+	"panelGuid":          uuid.NewString(),
+	"apiToken":           "",
+	// Node mTLS material (opt-in). All default empty: the CA + master client
+	// cert are minted lazily on first use, and the node-side trust CA is pasted
+	// in by the operator. Kept out of entity.AllSetting so private keys never
+	// reach the settings UI/export.
+	"nodeMtlsCaCertPem":           "",
+	"nodeMtlsCaKeyPem":            "",
+	"nodeMtlsClientCertPem":       "",
+	"nodeMtlsClientKeyPem":        "",
+	"nodeMtlsClientCAPem":         "",
 	"webBasePath":                 normalizeBasePath(getEnv("XUI_INIT_WEB_BASE_PATH", "/")),
 	"sessionMaxAge":               "360",
 	"trustedProxyCIDRs":           "127.0.0.1/32,::1/128",
 	"pageSize":                    "25",
 	"expireDiff":                  "0",
 	"trafficDiff":                 "0",
-	"remarkModel":                 "-ieo",
+	"remarkTemplate":              "{{INBOUND}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D",
 	"timeLocation":                "Local",
 	"tgBotEnable":                 "false",
 	"tgBotToken":                  "",
@@ -53,8 +64,8 @@ var defaultValueMap = map[string]string{
 	"tgBotChatId":                 "",
 	"tgRunTime":                   "@daily",
 	"tgBotBackup":                 "false",
-	"tgBotLoginNotify":            "true",
 	"tgCpu":                       "80",
+	"tgMemory":                    "80",
 	"tgLang":                      "en-US",
 	"twoFactorEnable":             "false",
 	"twoFactorToken":              "",
@@ -66,6 +77,7 @@ var defaultValueMap = map[string]string{
 	"subAnnounce":                 "",
 	"subEnableRouting":            "false",
 	"subRoutingRules":             "",
+	"subHideSettings":             "false",
 	"subListen":                   "",
 	"subPort":                     "2096",
 	"subPath":                     "/sub/",
@@ -74,8 +86,6 @@ var defaultValueMap = map[string]string{
 	"subKeyFile":                  "",
 	"subUpdates":                  "12",
 	"subEncrypt":                  "true",
-	"subShowInfo":                 "true",
-	"subEmailInRemark":            "true",
 	"subURI":                      "",
 	"subJsonPath":                 "/json/",
 	"subJsonURI":                  "",
@@ -119,6 +129,21 @@ var defaultValueMap = map[string]string{
 	"ldapDefaultTotalGB":    "0",
 	"ldapDefaultExpiryDays": "0",
 	"ldapDefaultLimitIP":    "0",
+
+	// Event bus — per-subscriber event filtering (empty = all disabled)
+	"tgEnabledEvents":   "login.attempt,cpu.high",
+	"smtpEnabledEvents": "login.attempt,cpu.high",
+	"smtpCpu":           "80",
+	"smtpMemory":        "80",
+
+	// Email (SMTP) notifications
+	"smtpEnable":         "false",
+	"smtpHost":           "",
+	"smtpPort":           "587",
+	"smtpUsername":       "",
+	"smtpPassword":       "",
+	"smtpTo":             "",
+	"smtpEncryptionType": "starttls", // no, starttls, tls
 }
 
 // SettingService provides business logic for application settings management.
@@ -220,6 +245,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.HasLdapPassword = secretConfigured(allSetting.LdapPassword)
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
+	view.HasSmtpPassword = secretConfigured(allSetting.SmtpPassword)
 	var apiTokenCount int64
 	if err := database.GetDB().Model(model.ApiToken{}).Where("enabled = ?", true).Count(&apiTokenCount).Error; err == nil {
 		view.HasApiToken = apiTokenCount > 0
@@ -227,6 +253,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.TgBotToken = ""
 	view.TwoFactorToken = ""
 	view.LdapPassword = ""
+	view.SmtpPassword = ""
 	return view, nil
 }
 
@@ -434,6 +461,26 @@ func (s *SettingService) PanelEgressProxyURL() string {
 	return ""
 }
 
+func (s *SettingService) NodeEgressProxyURL(nodeID int) string {
+	tag := NodeEgressInboundTag(nodeID)
+	proc := XrayProcess()
+	if proc == nil || !proc.IsRunning() {
+		logger.Warning("node outbound [", tag, "] is set but Xray is not running, using a direct connection")
+		return ""
+	}
+	cfg := proc.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == tag {
+			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
+		}
+	}
+	logger.Warning("node outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
+	return ""
+}
+
 // NewProxiedHTTPClient returns an HTTP client that routes the panel's own
 // outbound requests through the configured panel outbound (via the loopback
 // SOCKS bridge in the running Xray). When the feature is off or the bridge
@@ -484,12 +531,16 @@ func (s *SettingService) GetTgBotBackup() (bool, error) {
 	return s.getBool("tgBotBackup")
 }
 
-func (s *SettingService) GetTgBotLoginNotify() (bool, error) {
-	return s.getBool("tgBotLoginNotify")
-}
-
 func (s *SettingService) GetTgCpu() (int, error) {
 	return s.getInt("tgCpu")
+}
+
+func (s *SettingService) GetTgMemory() (int, error) {
+	return s.getInt("tgMemory")
+}
+
+func (s *SettingService) SetTgMemory(value int) error {
+	return s.setInt("tgMemory", value)
 }
 
 func (s *SettingService) GetTgLang() (string, error) {
@@ -552,8 +603,8 @@ func (s *SettingService) GetTrustedProxyCIDRs() (string, error) {
 	return s.getString("trustedProxyCIDRs")
 }
 
-func (s *SettingService) GetRemarkModel() (string, error) {
-	return s.getString("remarkModel")
+func (s *SettingService) GetRemarkTemplate() (string, error) {
+	return s.getString("remarkTemplate")
 }
 
 func (s *SettingService) GetSecret() ([]byte, error) {
@@ -654,6 +705,10 @@ func (s *SettingService) GetSubRoutingRules() (string, error) {
 	return s.getString("subRoutingRules")
 }
 
+func (s *SettingService) GetSubHideSettings() (bool, error) {
+	return s.getBool("subHideSettings")
+}
+
 func (s *SettingService) GetSubListen() (string, error) {
 	return s.getString("subListen")
 }
@@ -696,14 +751,6 @@ func (s *SettingService) GetSubUpdates() (string, error) {
 
 func (s *SettingService) GetSubEncrypt() (bool, error) {
 	return s.getBool("subEncrypt")
-}
-
-func (s *SettingService) GetSubShowInfo() (bool, error) {
-	return s.getBool("subShowInfo")
-}
-
-func (s *SettingService) GetSubEmailInRemark() (bool, error) {
-	return s.getBool("subEmailInRemark")
 }
 
 func (s *SettingService) GetPageSize() (int, error) {
@@ -898,6 +945,98 @@ func (s *SettingService) GetLdapDefaultLimitIP() (int, error) {
 	return s.getInt("ldapDefaultLimitIP")
 }
 
+// Event bus — per-subscriber event filtering
+
+func (s *SettingService) GetTgEnabledEvents() (string, error) {
+	return s.getString("tgEnabledEvents")
+}
+
+func (s *SettingService) SetTgEnabledEvents(events string) error {
+	return s.setString("tgEnabledEvents", events)
+}
+
+func (s *SettingService) GetSmtpEnabledEvents() (string, error) {
+	return s.getString("smtpEnabledEvents")
+}
+
+func (s *SettingService) SetSmtpEnabledEvents(events string) error {
+	return s.setString("smtpEnabledEvents", events)
+}
+
+// Email (SMTP) settings
+
+func (s *SettingService) GetSmtpEnable() (bool, error) {
+	return s.getBool("smtpEnable")
+}
+
+func (s *SettingService) SetSmtpEnable(value bool) error {
+	return s.setBool("smtpEnable", value)
+}
+
+func (s *SettingService) GetSmtpHost() (string, error) {
+	return s.getString("smtpHost")
+}
+
+func (s *SettingService) SetSmtpHost(value string) error {
+	return s.setString("smtpHost", value)
+}
+
+func (s *SettingService) GetSmtpPort() (int, error) {
+	return s.getInt("smtpPort")
+}
+
+func (s *SettingService) SetSmtpPort(value int) error {
+	return s.setInt("smtpPort", value)
+}
+
+func (s *SettingService) GetSmtpUsername() (string, error) {
+	return s.getString("smtpUsername")
+}
+
+func (s *SettingService) SetSmtpUsername(value string) error {
+	return s.setString("smtpUsername", value)
+}
+
+func (s *SettingService) GetSmtpPassword() (string, error) {
+	return s.getString("smtpPassword")
+}
+
+func (s *SettingService) SetSmtpPassword(value string) error {
+	return s.setString("smtpPassword", value)
+}
+
+func (s *SettingService) GetSmtpTo() (string, error) {
+	return s.getString("smtpTo")
+}
+
+func (s *SettingService) SetSmtpTo(value string) error {
+	return s.setString("smtpTo", value)
+}
+
+func (s *SettingService) GetSmtpEncryptionType() (string, error) {
+	return s.getString("smtpEncryptionType")
+}
+
+func (s *SettingService) SetSmtpEncryptionType(value string) error {
+	return s.setString("smtpEncryptionType", value)
+}
+
+func (s *SettingService) GetSmtpCpu() (int, error) {
+	return s.getInt("smtpCpu")
+}
+
+func (s *SettingService) SetSmtpCpu(value int) error {
+	return s.setInt("smtpCpu", value)
+}
+
+func (s *SettingService) GetSmtpMemory() (int, error) {
+	return s.getInt("smtpMemory")
+}
+
+func (s *SettingService) SetSmtpMemory(value int) error {
+	return s.setInt("smtpMemory", value)
+}
+
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 	if err := s.preserveRedactedSecrets(allSetting); err != nil {
 		return err
@@ -912,17 +1051,37 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 	v := reflect.ValueOf(allSetting).Elem()
 	t := reflect.TypeFor[entity.AllSetting]()
 	fields := reflect_util.GetFields(t)
-	errs := make([]error, 0)
-	for _, field := range fields {
-		key := field.Tag.Get("json")
-		fieldV := v.FieldByName(field.Name)
-		value := fmt.Sprint(fieldV.Interface())
-		err := s.saveSetting(key, value)
-		if err != nil {
-			errs = append(errs, err)
+
+	db := database.GetDB()
+	return db.Transaction(func(tx *gorm.DB) error {
+		var existing []*model.Setting
+		if err := tx.Find(&existing).Error; err != nil {
+			return err
 		}
-	}
-	return common.Combine(errs...)
+		byKey := make(map[string]*model.Setting, len(existing))
+		for _, st := range existing {
+			byKey[st.Key] = st
+		}
+		for _, field := range fields {
+			key := field.Tag.Get("json")
+			fieldV := v.FieldByName(field.Name)
+			value := fmt.Sprint(fieldV.Interface())
+			if st, ok := byKey[key]; ok {
+				if st.Value == value {
+					continue
+				}
+				st.Value = value
+				if err := tx.Save(st).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if err := tx.Create(&model.Setting{Key: key, Value: value}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting) error {
@@ -946,6 +1105,13 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting) 
 			return err
 		}
 		allSetting.TwoFactorToken = value
+	}
+	if strings.TrimSpace(allSetting.SmtpPassword) == "" {
+		value, err := s.GetSmtpPassword()
+		if err != nil {
+			return err
+		}
+		allSetting.SmtpPassword = value
 	}
 	return nil
 }
@@ -1047,7 +1213,6 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 		"subURI":          func() (any, error) { return s.GetSubURI() },
 		"subJsonURI":      func() (any, error) { return s.GetSubJsonURI() },
 		"subClashURI":     func() (any, error) { return s.GetSubClashURI() },
-		"remarkModel":     func() (any, error) { return s.GetRemarkModel() },
 		"datepicker":      func() (any, error) { return s.GetDatepicker() },
 		"ipLimitEnable":   func() (any, error) { return s.GetIpLimitEnable() },
 		"accessLogEnable": func() (any, error) { return s.GetAccessLogEnable() },

@@ -44,6 +44,11 @@ export interface ClientCountEntry {
   online: string[];
 }
 
+export interface InboundSpeedEntry {
+  up: number;
+  down: number;
+}
+
 export type RowAction =
   | 'edit'
   | 'showInfo'
@@ -64,6 +69,7 @@ export interface InboundListProps {
   clientCount: Record<number, ClientCountEntry>;
   onlineClients: string[];
   lastOnlineMap: Record<string, number>;
+  inboundSpeed: Record<number, InboundSpeedEntry>;
   expireDiff: number;
   trafficDiff: number;
   pageSize: number;

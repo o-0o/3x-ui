@@ -13,17 +13,16 @@ export class AllSetting {
   pageSize = 25;
   expireDiff = 0;
   trafficDiff = 0;
-  remarkModel = '-io';
+  remarkTemplate = '{{INBOUND}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D';
   datepicker: 'gregorian' | 'jalalian' = 'gregorian';
   tgBotEnable = false;
   tgBotToken = '';
-  tgBotProxy = '';
   tgBotAPIServer = '';
   tgBotChatId = '';
   tgRunTime = '@daily';
   tgBotBackup = false;
-  tgBotLoginNotify = true;
   tgCpu = 80;
+  tgMemory = 80;
   tgLang = 'en-US';
   twoFactorEnable = false;
   twoFactorToken = '';
@@ -50,8 +49,6 @@ export class AllSetting {
   subKeyFile = '';
   subUpdates = 12;
   subEncrypt = true;
-  subShowInfo = true;
-  subEmailInRemark = true;
   subURI = '';
   subJsonURI = '';
   subClashURI = '';
@@ -61,6 +58,7 @@ export class AllSetting {
   subJsonRules = '';
   subJsonFinalMask = '';
   subThemeDir = '';
+  subHideSettings = false;
 
   timeLocation = 'Local';
 
@@ -84,12 +82,24 @@ export class AllSetting {
   ldapDefaultTotalGB = 0;
   ldapDefaultExpiryDays = 0;
   ldapDefaultLimitIP = 0;
+  tgEnabledEvents = '';
+  smtpEnable = false;
+  smtpHost = '';
+  smtpPort = 587;
+  smtpUsername = '';
+  smtpPassword = '';
+  smtpTo = '';
+  smtpEncryptionType = 'starttls';
+  smtpEnabledEvents = '';
+  smtpCpu = 80;
+  smtpMemory = 80;
   hasTgBotToken = false;
   hasTwoFactorToken = false;
   hasLdapPassword = false;
   hasApiToken = false;
   hasWarpSecret = false;
   hasNordSecret = false;
+  hasSmtpPassword = false;
 
   constructor(data?: unknown) {
     if (data != null) {

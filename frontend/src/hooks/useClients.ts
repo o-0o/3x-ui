@@ -22,6 +22,7 @@ import {
   type ClientsSummary,
   type ClientPageResponse,
   type InboundOption,
+  type ExternalLink,
   type BulkAdjustResult,
   type BulkAttachResult,
   type BulkCreateResult,
@@ -30,7 +31,10 @@ import {
 } from '@/schemas/client';
 import { DefaultsPayloadSchema } from '@/schemas/defaults';
 
-export type { ClientRecord, ClientTraffic, ClientsSummary, InboundOption };
+// One row sent to POST /clients/:email/externalLinks.
+export type ExternalLinkInput = { kind: 'link' | 'subscription'; value: string; remark: string };
+
+export type { ClientRecord, ClientTraffic, ClientsSummary, InboundOption, ExternalLink };
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
 
@@ -350,6 +354,12 @@ export function useClients() {
     onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
   });
 
+  const setExternalLinksMut = useMutation({
+    mutationFn: ({ email, externalLinks }: { email: string; externalLinks: ExternalLinkInput[] }) =>
+      HttpUtil.post(`/panel/api/clients/${encodeURIComponent(email)}/externalLinks`, { externalLinks }, JSON_HEADERS),
+    onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
+  });
+
   const bulkAttachMut = useMutation({
     mutationFn: async (payload: { emails: string[]; inboundIds: number[] }): Promise<Msg<BulkAttachResult>> => {
       const raw = await HttpUtil.post('/panel/api/clients/bulkAttach', payload, JSON_HEADERS);
@@ -363,6 +373,7 @@ export function useClients() {
       HttpUtil.post(`/panel/api/clients/${encodeURIComponent(email)}/detach`, { inboundIds }, JSON_HEADERS),
     onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
   });
+
 
   const bulkDetachMut = useMutation({
     mutationFn: async (payload: { emails: string[]; inboundIds: number[] }): Promise<Msg<BulkDetachResult>> => {
@@ -387,6 +398,22 @@ export function useClients() {
     mutationFn: async () => {
       const raw = await HttpUtil.post('/panel/api/clients/delDepleted');
       return parseMsg(raw, DelDepletedResultSchema, 'clients/delDepleted');
+    },
+    onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
+  });
+
+  const delOrphansMut = useMutation({
+    mutationFn: async () => {
+      const raw = await HttpUtil.post('/panel/api/clients/delOrphans');
+      return parseMsg(raw, DelDepletedResultSchema, 'clients/delOrphans');
+    },
+    onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
+  });
+
+  const importClientsMut = useMutation({
+    mutationFn: async (data: string): Promise<Msg<BulkCreateResult>> => {
+      const raw = await HttpUtil.post('/panel/api/clients/import', { data }, JSON_HEADERS);
+      return parseMsg(raw, BulkCreateResultSchema, 'clients/import');
     },
     onSuccess: (msg) => { if (msg?.success) invalidateAll(); },
   });
@@ -424,6 +451,10 @@ export function useClients() {
     if (!email) return Promise.resolve(null as unknown as Msg<unknown>);
     return attachMut.mutateAsync({ email, inboundIds });
   }, [attachMut]);
+  const setExternalLinks = useCallback((email: string, externalLinks: ExternalLinkInput[]) => {
+    if (!email) return Promise.resolve(null as unknown as Msg<unknown>);
+    return setExternalLinksMut.mutateAsync({ email, externalLinks });
+  }, [setExternalLinksMut]);
   const bulkAttach = useCallback((emails: string[], inboundIds: number[]) => {
     if (!Array.isArray(emails) || emails.length === 0) return Promise.resolve(null as unknown as Msg<BulkAttachResult>);
     if (!Array.isArray(inboundIds) || inboundIds.length === 0) return Promise.resolve(null as unknown as Msg<BulkAttachResult>);
@@ -444,6 +475,15 @@ export function useClients() {
   }, [resetTrafficMut]);
   const resetAllTraffics = useCallback(() => resetAllTrafficsMut.mutateAsync(), [resetAllTrafficsMut]);
   const delDepleted = useCallback(() => delDepletedMut.mutateAsync(), [delDepletedMut]);
+  const delOrphans = useCallback(() => delOrphansMut.mutateAsync(), [delOrphansMut]);
+  const importClients = useCallback((data: string) => importClientsMut.mutateAsync(data), [importClientsMut]);
+  // Fetch the exported clients so the page can show them in a CodeMirror viewer
+  // (Copy / Download), rather than triggering an immediate browser download.
+  const exportClients = useCallback(async (): Promise<unknown[] | null> => {
+    const msg = await HttpUtil.get('/panel/api/clients/export');
+    if (!msg?.success) return null;
+    return Array.isArray(msg.obj) ? msg.obj : [];
+  }, []);
 
   const setEnable = useCallback(async (client: ClientRecord, enable: boolean) => {
     if (!client?.email) return null;
@@ -553,12 +593,16 @@ export function useClients() {
     bulkAddToGroup,
     bulkRemoveFromGroup,
     attach,
+    setExternalLinks,
     bulkAttach,
     detach,
     bulkDetach,
     resetTraffic,
     resetAllTraffics,
     delDepleted,
+    delOrphans,
+    exportClients,
+    importClients,
     setEnable,
     applyTrafficEvent,
     applyClientStatsEvent,

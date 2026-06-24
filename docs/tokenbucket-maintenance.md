@@ -9,7 +9,7 @@ For the Chinese step-by-step install/update guide, see
 ## Fork-specific areas
 
 - `tools/xray-tokenbucket/`
-  - Builds a patched Xray-core binary from upstream Xray-core `v26.6.1`.
+  - Builds a patched Xray-core binary from upstream Xray-core `v26.6.22`.
   - Contains the Xray-core patch. Keep Xray changes here instead of vendoring a
     full Xray-core tree into this repository.
 - `internal/database/model/model.go`
@@ -51,7 +51,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-t
 Specific release:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.3.1-tokenbucket.12
+bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.4.0-tokenbucket.1
 ```
 
 Fresh install is only for a new server:

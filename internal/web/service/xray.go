@@ -925,11 +925,12 @@ func (s *XrayService) RestartXray(isForce bool) error {
 
 	if s.IsXrayRunning() {
 		configUnchanged := p.GetConfig().Equals(xrayConfig)
-		if !isForce && configUnchanged && !isNeedXrayRestart.Load() {
+		mustRestart := isForce || isNeedXrayRestart.Load()
+		if !mustRestart && configUnchanged {
 			logger.Debug("It does not need to restart Xray")
 			return nil
 		}
-		if !isForce && !configUnchanged && s.tryHotApply(xrayConfig) {
+		if !mustRestart && !configUnchanged && s.tryHotApply(xrayConfig) {
 			logger.Info("Xray config changes applied through the core API, no restart needed")
 			return nil
 		}
@@ -943,6 +944,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 	if err != nil {
 		return err
 	}
+	isNeedXrayRestart.Store(false)
 
 	return nil
 }

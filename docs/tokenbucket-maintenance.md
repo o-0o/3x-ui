@@ -51,7 +51,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-t
 Specific release:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.4.1-tokenbucket.2
+bash <(curl -Ls https://raw.githubusercontent.com/o-0o/3x-ui/feature/xray-core-tokenbucket-speed-limit/update.sh) v3.4.1-tokenbucket.3
 ```
 
 Fresh install is only for a new server:

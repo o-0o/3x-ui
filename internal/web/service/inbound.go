@@ -1214,8 +1214,17 @@ func (s *InboundService) buildRuntimeInboundForAPI(tx *gorm.DB, inbound *model.I
 		return &runtimeInbound, nil
 	}
 
+	dbClients, err := s.clientService.ListForInbound(tx, inbound.Id)
+	if err != nil {
+		return nil, err
+	}
+	speedLimitByEmail := make(map[string]uint64, len(dbClients))
+	for i := range dbClients {
+		speedLimitByEmail[dbClients[i].Email] = dbClients[i].SpeedLimit
+	}
+
 	var clientStats []xray.ClientTraffic
-	err := tx.Model(xray.ClientTraffic{}).
+	err = tx.Model(xray.ClientTraffic{}).
 		Where("inbound_id = ?", inbound.Id).
 		Select("email", "enable").
 		Find(&clientStats).Error
@@ -1242,6 +1251,12 @@ func (s *InboundService) buildRuntimeInboundForAPI(tx *gorm.DB, inbound *model.I
 
 		if manualEnable, ok := c["enable"].(bool); ok && !manualEnable {
 			continue
+		}
+
+		if speedLimit, exists := speedLimitByEmail[email]; exists && speedLimit > 0 {
+			c["speedLimit"] = speedLimit
+		} else {
+			delete(c, "speedLimit")
 		}
 
 		finalClients = append(finalClients, c)

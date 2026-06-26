@@ -76,3 +76,73 @@ func TestGetXrayConfigIncludesClientSpeedLimit(t *testing.T) {
 		t.Fatalf("generated speedLimit = %v, want %d; config=%s", got, wantSpeed, raw)
 	}
 }
+
+func TestBuildRuntimeInboundForAPIEnrichesSpeedLimitFromClientRecord(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	db := database.GetDB()
+	const limitedEmail = "limited-node@example.com"
+	const unlimitedEmail = "unlimited-node@example.com"
+	const limitedID = "ce8d33df-3a64-4f10-8f9b-91c3a8e0c007"
+	const unlimitedID = "37b0217d-b51b-412d-9cca-3e2b90c6a721"
+	const wantSpeed uint64 = 314573
+
+	ib := &model.Inbound{
+		UserId:   1,
+		Tag:      "remote-speed-vless",
+		Enable:   true,
+		Port:     21002,
+		Protocol: model.VLESS,
+		Settings: `{
+		  "clients": [
+		    {"email":"limited-node@example.com","id":"ce8d33df-3a64-4f10-8f9b-91c3a8e0c007"},
+		    {"email":"unlimited-node@example.com","id":"37b0217d-b51b-412d-9cca-3e2b90c6a721","speedLimit":12345}
+		  ],
+		  "decryption": "none"
+		}`,
+		StreamSettings: `{"network":"tcp","security":"none","tcpSettings":{"header":{"type":"none"}}}`,
+	}
+	if err := db.Create(ib).Error; err != nil {
+		t.Fatalf("create inbound: %v", err)
+	}
+
+	clients := []model.Client{
+		{Email: limitedEmail, ID: limitedID, Enable: true, SpeedLimit: wantSpeed},
+		{Email: unlimitedEmail, ID: unlimitedID, Enable: true, SpeedLimit: 0},
+	}
+	if err := (&ClientService{}).SyncInbound(nil, ib.Id, clients); err != nil {
+		t.Fatalf("SyncInbound: %v", err)
+	}
+
+	runtimeInbound, err := (&InboundService{}).buildRuntimeInboundForAPI(db, ib)
+	if err != nil {
+		t.Fatalf("buildRuntimeInboundForAPI: %v", err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(runtimeInbound.Settings), &settings); err != nil {
+		t.Fatalf("unmarshal runtime settings: %v", err)
+	}
+	runtimeClients, _ := settings["clients"].([]any)
+	if len(runtimeClients) != 2 {
+		t.Fatalf("runtime clients = %v, want 2", settings["clients"])
+	}
+
+	byEmail := map[string]map[string]any{}
+	for _, rawClient := range runtimeClients {
+		c, _ := rawClient.(map[string]any)
+		email, _ := c["email"].(string)
+		byEmail[email] = c
+	}
+	got, _ := byEmail[limitedEmail]["speedLimit"].(float64)
+	if uint64(got) != wantSpeed {
+		t.Fatalf("limited speedLimit = %v, want %d; settings=%s", got, wantSpeed, runtimeInbound.Settings)
+	}
+	if _, exists := byEmail[unlimitedEmail]["speedLimit"]; exists {
+		t.Fatalf("unlimited client kept stale speedLimit; settings=%s", runtimeInbound.Settings)
+	}
+}

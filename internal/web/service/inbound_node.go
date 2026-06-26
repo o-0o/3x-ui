@@ -120,7 +120,11 @@ func (s *InboundService) ReconcileNode(ctx context.Context, rt *runtime.Remote, 
 				}
 			}
 		}
-		if _, err := rt.ReconcileInbound(ctx, ib, existsOnNode); err != nil {
+		runtimeInbound, err := s.buildRuntimeInboundForAPI(db, ib)
+		if err != nil {
+			return fmt.Errorf("build runtime inbound %q: %w", ib.Tag, err)
+		}
+		if _, err := rt.ReconcileInbound(ctx, runtimeInbound, existsOnNode); err != nil {
 			return fmt.Errorf("reconcile inbound %q: %w", ib.Tag, err)
 		}
 	}

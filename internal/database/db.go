@@ -839,7 +839,7 @@ func normalizeClientJSONFields(obj map[string]any) {
 			delete(obj, key)
 		}
 	}
-	for _, k := range []string{"tgId", "limitIp", "totalGB", "expiryTime", "reset", "created_at", "updated_at"} {
+	for _, k := range []string{"tgId", "limitIp", "totalGB", "speedLimit", "expiryTime", "reset", "created_at", "updated_at"} {
 		normalizeInt(k)
 	}
 }

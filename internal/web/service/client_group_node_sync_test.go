@@ -118,6 +118,44 @@ func TestSyncInbound_KeepsGroupWhenIncomingEmpty(t *testing.T) {
 	}
 }
 
+func TestSyncInbound_UpdatesSpeedLimitForExistingRecord(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	db := database.GetDB()
+
+	ib := &model.Inbound{Tag: "vless-speed", Enable: true, Port: 20004, Protocol: model.VLESS}
+	if err := db.Create(ib).Error; err != nil {
+		t.Fatalf("create inbound: %v", err)
+	}
+
+	const email = "speed-user@example.com"
+	const uid = "ce8d33df-3a64-4f10-8f9b-91c3a8e0c006"
+	const wantSpeed uint64 = 100 * 1024
+
+	if err := db.Create(&model.ClientRecord{Email: email, UUID: uid, Enable: true, SpeedLimit: 0}).Error; err != nil {
+		t.Fatalf("create existing client record: %v", err)
+	}
+
+	svc := ClientService{}
+	client := model.Client{Email: email, ID: uid, Enable: true, SpeedLimit: wantSpeed}
+	if err := svc.SyncInbound(nil, ib.Id, []model.Client{client}); err != nil {
+		t.Fatalf("SyncInbound: %v", err)
+	}
+
+	var row model.ClientRecord
+	if err := db.Where("email = ?", email).First(&row).Error; err != nil {
+		t.Fatalf("lookup client row: %v", err)
+	}
+	if row.SpeedLimit != wantSpeed {
+		t.Errorf("speed limit not synced into existing client record: got %d, want %d", row.SpeedLimit, wantSpeed)
+	}
+}
+
 // Removing the group in the client editor and saving must clear group_name and
 // drop the settings "group" key, even though SyncInbound preserves a group on a
 // group-less rebuild. The editor round-trips the field, so ClientService.Update

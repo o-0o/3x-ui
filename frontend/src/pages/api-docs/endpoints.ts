@@ -411,6 +411,15 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/server/setUpdateChannel',
+        summary: 'Toggle the panel update channel between stable and the rolling per-commit dev release. Only effective on dev builds.',
+        params: [
+          { name: 'dev', in: 'body (form)', type: 'boolean', desc: 'true = dev channel, false = stable.' },
+        ],
+        body: 'dev=true',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/server/updateGeofile',
         summary: 'Refresh the default GeoIP / GeoSite data files. Body can include a fileName, or use the /:fileName variant.',
         params: [
@@ -644,9 +653,23 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/clients/bulkAdjust',
-        summary: 'Shift expiry and/or traffic quota for many clients in one call. addDays/addBytes may be negative. Clients with unlimited expiry (expiryTime=0) or unlimited traffic (totalGB=0) are skipped for the corresponding field — bulk extend never converts unlimited to limited. Returns the adjusted count and per-email skip reasons.',
-        body: '{\n  "emails": ["alice", "bob"],\n  "addDays": 30,\n  "addBytes": 53687091200\n}',
+        summary: 'Shift expiry and/or traffic quota for many clients in one call. addDays/addBytes may be negative. Clients with unlimited expiry (expiryTime=0) or unlimited traffic (totalGB=0) are skipped for the corresponding field — bulk extend never converts unlimited to limited. The optional flow directive sets the XTLS flow on every client: "none" clears it, "xtls-rprx-vision"/"xtls-rprx-vision-udp443" set it where the inbound supports it (omit or "" to leave it unchanged). Returns the adjusted count and per-email skip reasons.',
+        body: '{\n  "emails": ["alice", "bob"],\n  "addDays": 30,\n  "addBytes": 53687091200,\n  "flow": "xtls-rprx-vision"\n}',
         response: '{\n  "success": true,\n  "obj": {\n    "adjusted": 2,\n    "skipped": [\n      { "email": "carol", "reason": "unlimited expiry" }\n    ]\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clients/bulkEnable',
+        summary: 'Enable many clients in one call. Emails are grouped by inbound and applied with a single read-modify-write per inbound; the running Xray (local or remote node) is updated to add each user. Note that enabling a client whose quota is exhausted or whose expiry has passed only flips the flag — the traffic loop will disable it again on the next tick. Returns the changed count and per-email skip reasons.',
+        body: '{\n  "emails": ["alice", "bob"]\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "changed": 2,\n    "skipped": [\n      { "email": "carol", "reason": "client not found" }\n    ]\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clients/bulkDisable',
+        summary: 'Disable many clients in one call. Emails are grouped by inbound and applied with a single read-modify-write per inbound; the running Xray (local or remote node) is updated to remove each user. Returns the changed count and per-email skip reasons.',
+        body: '{\n  "emails": ["alice", "bob"]\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "changed": 2,\n    "skipped": [\n      { "email": "carol", "reason": "client not found" }\n    ]\n  }\n}',
       },
       {
         method: 'POST',
@@ -945,8 +968,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/nodes/updatePanel',
-        summary: 'Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Returns a per-node result list.',
-        body: '{\n  "ids": [1, 2, 3]\n}',
+        summary: 'Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set "dev": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.',
+        body: '{\n  "ids": [1, 2, 3],\n  "dev": false\n}',
         response: '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
       },
       {

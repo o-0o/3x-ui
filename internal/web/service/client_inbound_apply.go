@@ -805,6 +805,9 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 		delStat = traffic != nil
 	}
 
+	// The runtime user is scoped to this inbound's tag + email, so the push plan
+	// is resolved independently of emailShared — a sibling inbound still carrying
+	// the email must not suppress removing the user from this inbound's Xray.
 	var rt runtime.Runtime
 	var push bool
 	// Sharing an email with another inbound only controls whether global traffic
@@ -849,7 +852,9 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	}
 
 	// Apply the runtime delete after commit — outside the serialized writer so a
-	// slow node call can't stall traffic accounting.
+	// slow node call can't stall traffic accounting. Independent of emailShared:
+	// Xray users are keyed by inbound tag, so the user must be removed from this
+	// inbound's runtime even when the same email survives in another inbound.
 	if len(email) > 0 {
 		if oldInbound.NodeID == nil {
 			// Local inbound: a disabled client isn't in the running Xray, so only

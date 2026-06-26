@@ -826,6 +826,9 @@ update_x-ui() {
 
     if [[ -n "${1:-}" ]]; then
         tag_version="$1"
+    elif [[ -n "${XUI_UPDATE_TAG}" ]]; then
+        tag_version="${XUI_UPDATE_TAG}"
+        echo -e "${green}Using update tag: ${tag_version}${plain}"
     else
         tag_version=$(${curl_bin} -Ls "https://api.github.com/repos/${repo_owner}/${repo_name}/releases?per_page=100" 2> /dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | grep -E 'tokenbucket' | head -n1)
         if [[ ! -n "$tag_version" ]]; then

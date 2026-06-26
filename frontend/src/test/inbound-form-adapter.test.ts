@@ -47,6 +47,7 @@ const vlessRow: RawInboundRow = {
       subId: 'abc123def',
       comment: '',
       reset: 0,
+      speedLimit: 0,
     }],
     decryption: 'none',
     encryption: 'none',

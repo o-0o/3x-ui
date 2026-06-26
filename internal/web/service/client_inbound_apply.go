@@ -18,6 +18,15 @@ import (
 	"gorm.io/gorm"
 )
 
+func hasSpeedLimitedClient(clients []model.Client) bool {
+	for i := range clients {
+		if clients[i].SpeedLimit > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // delInboundClients removes several clients from a single inbound in one pass:
 // one settings rewrite, one runtime sweep, one Save and one SyncInbound for the
 // whole batch, instead of repeating the full per-client cycle. It mirrors the
@@ -390,6 +399,10 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 				if !client.Enable {
 					continue
 				}
+				if client.SpeedLimit > 0 {
+					needRestart = true
+					continue
+				}
 				cipher := ""
 				if oldInbound.Protocol == "shadowsocks" {
 					cipher = oldSettings["method"].(string)
@@ -406,9 +419,6 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 				})
 				if err1 == nil {
 					logger.Debug("Client added on", rt.Name(), ":", client.Email)
-					if client.SpeedLimit > 0 {
-						needRestart = true
-					}
 				} else {
 					logger.Debug("Error in adding client on", rt.Name(), ":", err1)
 					needRestart = true
@@ -423,17 +433,28 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 			markDirty = true
 			push = false
 		}
+		if push && hasSpeedLimitedClient(clients) {
+			runtimeInbound, err := inboundSvc.buildRuntimeInboundForAPI(database.GetDB(), oldInbound)
+			if err != nil {
+				logger.Warning("Error in building speed-limited inbound for", rt.Name(), ":", err)
+				markDirty = true
+				push = false
+			} else if err1 := rt.UpdateInbound(context.Background(), oldInbound, runtimeInbound); err1 != nil {
+				logger.Warning("Error in pushing speed-limited inbound to", rt.Name(), ":", err1)
+				markDirty = true
+				push = false
+			} else if err2 := rt.RestartXray(context.Background()); err2 != nil {
+				logger.Warning("Error in restarting xray on", rt.Name(), "after adding speed-limited client:", err2)
+				markDirty = true
+			}
+			push = false
+		}
 		for _, client := range clients {
 			if push {
 				if err1 := rt.AddClient(context.Background(), oldInbound, client); err1 != nil {
 					logger.Warning("Error in adding client on", rt.Name(), ":", err1)
 					markDirty = true
 					push = false
-				} else if client.SpeedLimit > 0 {
-					if err2 := rt.RestartXray(context.Background()); err2 != nil {
-						logger.Warning("Error in restarting xray on", rt.Name(), "after adding speed-limited client:", err2)
-						markDirty = true
-					}
 				}
 			}
 		}
@@ -670,12 +691,13 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// serialized writer so a slow node call can't stall traffic accounting.
 	if len(oldEmail) > 0 {
 		if oldInbound.NodeID == nil {
-			if oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0 {
+			speedLimitChanged := oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0
+			if speedLimitChanged {
 				needRestart = true
 			}
 			if !push {
 				needRestart = true
-			} else {
+			} else if !speedLimitChanged {
 				if oldClients[clientIndex].Enable {
 					err1 := rt.RemoveUser(context.Background(), oldInbound, oldEmail)
 					if err1 == nil {
@@ -711,14 +733,21 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				}
 			}
 		} else if push {
-			if err1 := rt.UpdateUser(context.Background(), oldInbound, oldEmail, clients[0]); err1 != nil {
-				logger.Warning("Error in updating client on", rt.Name(), ":", err1)
-				markDirty = true
-			} else if oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0 {
-				if err2 := rt.RestartXray(context.Background()); err2 != nil {
+			if oldClients[clientIndex].SpeedLimit > 0 || clients[0].SpeedLimit > 0 {
+				runtimeInbound, err := inboundSvc.buildRuntimeInboundForAPI(database.GetDB(), oldInbound)
+				if err != nil {
+					logger.Warning("Error in building speed-limited inbound for", rt.Name(), ":", err)
+					markDirty = true
+				} else if err1 := rt.UpdateInbound(context.Background(), oldInbound, runtimeInbound); err1 != nil {
+					logger.Warning("Error in pushing speed-limited inbound to", rt.Name(), ":", err1)
+					markDirty = true
+				} else if err2 := rt.RestartXray(context.Background()); err2 != nil {
 					logger.Warning("Error in restarting xray on", rt.Name(), "after updating speed-limited client:", err2)
 					markDirty = true
 				}
+			} else if err1 := rt.UpdateUser(context.Background(), oldInbound, oldEmail, clients[0]); err1 != nil {
+				logger.Warning("Error in updating client on", rt.Name(), ":", err1)
+				markDirty = true
 			}
 		}
 	} else {

@@ -32,7 +32,8 @@ type PanelUpdateInfo struct {
 }
 
 const (
-	panelUpdaterURL      = "https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh"
+	panelUpdaterURL      = "https://raw.githubusercontent.com/o-0o/3x-ui/stable/tokenbucket-v3.4.0/update.sh"
+	panelReleaseURL      = "https://api.github.com/repos/o-0o/3x-ui/releases/latest"
 	maxPanelUpdaterBytes = 2 << 20
 )
 
@@ -171,7 +172,7 @@ func downloadPanelUpdater() (string, error) {
 
 func fetchLatestPanelVersion() (string, error) {
 	client := (&service.SettingService{}).NewProxiedHTTPClient(10 * time.Second)
-	resp, err := client.Get("https://api.github.com/repos/MHSanaei/3x-ui/releases/latest")
+	resp, err := client.Get(panelReleaseURL)
 	if err != nil {
 		return "", err
 	}
